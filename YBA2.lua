@@ -19,7 +19,6 @@ local function createGUI()
     if Player:FindFirstChild("PlayerGui"):FindFirstChild("PigletHUB") then
         Player.PlayerGui.PigletHUB:Destroy()
     end
-
     local gui = Instance.new("ScreenGui", Player.PlayerGui)
     gui.Name = "PigletHUB"
     gui.ResetOnSpawn = false
@@ -60,7 +59,6 @@ local function createGUI()
     moneyText.Size = UDim2.new(1, 0, 0, 20)
     moneyText.BackgroundTransparency = 1
 
-    -- Add status indicator
     local statusText = Instance.new("TextLabel", frame)
     statusText.Text = "Status: Idle"
     statusText.Name = "Status"
@@ -70,8 +68,7 @@ local function createGUI()
     statusText.Position = UDim2.new(0, 0, 0, 80)
     statusText.Size = UDim2.new(1, 0, 0, 20)
     statusText.BackgroundTransparency = 1
-    
-    -- Add debug indicator
+
     local debugText = Instance.new("TextLabel", frame)
     debugText.Text = "Debug: None"
     debugText.Name = "Debug"
@@ -82,25 +79,24 @@ local function createGUI()
     debugText.Size = UDim2.new(1, 0, 0, 15)
     debugText.BackgroundTransparency = 1
 end
-
 createGUI()
 Player.CharacterAdded:Connect(createGUI)
 
 -- Config
 local ReturnSpot = CFrame.new(978, -42, -49)
 local serverHopTime = 105
--- Position for hiding under items
-local teleportOffset = Vector3.new(0, -6, 0)
+local teleportOffset = Vector3.new(0, -6, 0)  -- position offset for staying under items
 local BuyLucky = true
 local AutoSell = true
--- Anti-kick delays
-local delayBetweenTeleports = 1.5     -- Time between teleports
-local firstPickupDelay = 3            -- Extra time for first pickup
-local itemPickupTime = 2.0            -- Time to wait under item for pickup (increased for E hold)
-local pickupHoldTime = 1.2            -- Time to hold E key
-local betweenItemDelay = 2            -- Wait time between item pickups
-local isFirstPickup = true            -- Track first pickup
-local maxServerHopAttempts = 5        -- Maximum server hop attempts before restarting
+
+-- Anti-kick delays and timings
+local delayBetweenTeleports = 1.5       -- Wait time between teleports
+local firstPickupDelay = 3              -- Extra delay for the first pickup
+local itemPickupTime = 1.4              -- Time to stay under the item for pickup (in seconds)
+local pickupHoldTime = 1.2              -- Time to hold E key (simulate a long press)
+local betweenItemDelay = 2              -- Wait time between processing pickups
+local isFirstPickup = true              -- Flag to track first pickup
+local maxServerHopAttempts = 5          -- Max attempts for serverhop
 
 -- Inventory caps
 local ItemCaps = {
@@ -119,30 +115,36 @@ local SellItems = {
     ["Zeppeli's Hat"] = true, ["Lucky Arrow"] = false,
     ["Clackers"] = true, ["Steel Ball"] = true, ["Dio's Diary"] = true
 }
-
 -- Double item cap check
 local has2x = false
 pcall(function()
     has2x = MarketplaceService:UserOwnsGamePassAsync(Player.UserId, 14597778)
 end)
-if has2x then for k, v in pairs(ItemCaps) do ItemCaps[k] = v * 2 end end
+if has2x then
+    for k, v in pairs(ItemCaps) do 
+        ItemCaps[k] = v * 2 
+    end
+end
 
 -- Helpers
 local function toggleNoclip(state)
     for _, p in pairs(Character():GetDescendants()) do
-        if p:IsA("BasePart") then p.CanCollide = not state end
+        if p:IsA("BasePart") then 
+            p.CanCollide = not state 
+        end
     end
 end
 
 local function hasMax(item)
     local count = 0
     for _, tool in pairs(Player.Backpack:GetChildren()) do
-        if tool.Name == item then count = count + 1 end
+        if tool.Name == item then 
+            count = count + 1 
+        end
     end
     return (ItemCaps[item] or 9999) <= count
 end
 
--- Update GUI
 local function updateGUI(item, status, debug)
     local gui = Player.PlayerGui:FindFirstChild("PigletHUB")
     if gui then
@@ -160,11 +162,10 @@ local trackedItems = {}
 
 local function trackItem(itemModel)
     if not itemModel:IsA("Model") then return end
-    
-    -- Try to find the main part (Handle or PrimaryPart)
-    local mainPart = itemModel:FindFirstChild("Handle") or (itemModel.PrimaryPart or nil)
+
+    -- Find main part (Handle or PrimaryPart or any BasePart)
+    local mainPart = itemModel:FindFirstChild("Handle") or itemModel.PrimaryPart
     if not mainPart then 
-        -- Try to find any BasePart if Handle/PrimaryPart not available
         for _, part in pairs(itemModel:GetChildren()) do
             if part:IsA("BasePart") then
                 mainPart = part
@@ -173,7 +174,7 @@ local function trackItem(itemModel)
         end
         if not mainPart then return end
     end
-    
+
     local prompt = itemModel:FindFirstChildWhichIsA("ProximityPrompt", true)
     if prompt and prompt.ObjectText then
         table.insert(trackedItems, {
@@ -196,13 +197,10 @@ ItemFolder.ChildAdded:Connect(function(child)
     pcall(function() trackItem(child) end)
 end)
 
--- Hold E key function (simulates press and hold)
+-- Hold E key function (simulate press and hold)
 local function holdEKey(duration)
-    -- Press E
     VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-    -- Wait for the specified duration
     task.wait(duration)
-    -- Release E
     VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
 end
 
@@ -215,59 +213,54 @@ task.wait(2)
 -- Server hop function with retry mechanism
 local hopAttempts = 0
 local serverHopInProgress = false
-
 local function serverHop()
     if serverHopInProgress then return end
     serverHopInProgress = true
-    
+
     hopAttempts = hopAttempts + 1
     if hopAttempts > maxServerHopAttempts then
         updateGUI(nil, "Server Hop Failed", "Restarting script...")
         task.wait(2)
-        -- Force script restart by causing an error
         error("Restarting script due to failed server hops")
         return
     end
-    
+
     updateGUI(nil, "Server Hopping...", "Attempt " .. hopAttempts)
-    
+
     local success, errorMsg = pcall(function()
         local servers = {}
         local endpoint = "https://games.roblox.com/v1/games/2809202155/servers/Public?sortOrder=Asc&limit=100"
-        local data = HttpService:JSONDecode(game:HttpGet(endpoint))
-        
+        local response = HttpService:GetAsync(endpoint)
+        local data = HttpService:JSONDecode(response)
+
         for _, s in pairs(data.data) do
             if s.playing < s.maxPlayers and s.playing > 1 and s.id ~= game.JobId then
                 table.insert(servers, s.id)
             end
         end
-        
+
         if #servers > 0 then
-            -- Select a random server from the list
             local chosenServer = servers[math.random(1, #servers)]
             updateGUI(nil, "Server Found", "Teleporting to " .. chosenServer)
-            
-            -- Force GC collection before teleport
+
             for i = 1, 5 do
                 game:GetService("Debris"):AddItem(Instance.new("Frame"), 0)
                 task.wait(0.1)
             end
-            
-            -- Attempt teleport with timeout
+
             local teleportSuccess = false
             spawn(function()
                 teleportSuccess = pcall(function()
                     TeleportService:TeleportToPlaceInstance(game.PlaceId, chosenServer, Player)
                 end)
             end)
-            
-            -- Wait for teleport or timeout
+
             local startTime = tick()
             while tick() - startTime < 15 and not teleportSuccess do
                 task.wait(1)
                 updateGUI(nil, "Teleporting...", "Wait: " .. math.floor(tick() - startTime))
             end
-            
+
             if not teleportSuccess then
                 error("Teleport timed out")
             end
@@ -275,7 +268,7 @@ local function serverHop()
             error("No suitable servers found")
         end
     end)
-    
+
     if not success then
         updateGUI(nil, "Teleport Failed", errorMsg)
         task.wait(5)
@@ -299,18 +292,15 @@ end)
 
 -- Enhanced pickup function with HOLD E implementation
 local function pickupItem(item)
-    -- Wait longer for the first pickup to avoid instant teleport kicks
     if isFirstPickup then
         updateGUI(item.name, "First pickup delay...", "Preventing kick")
         task.wait(firstPickupDelay)
         isFirstPickup = false
     else
-        -- Normal delay between teleports
         updateGUI(item.name, "Item cooldown...", "Anti-kick delay")
         task.wait(delayBetweenTeleports)
     end
-    
-    -- Keep track of current inventory to verify pickup later
+
     local beforeCount = 0
     pcall(function()
         for _, tool in pairs(Player.Backpack:GetChildren()) do
@@ -319,37 +309,25 @@ local function pickupItem(item)
             end
         end
     end)
-    
+
     updateGUI(item.name, "Collecting...", "Moving to item")
     toggleNoclip(true)
-    
-    -- Position character safely under the item
+
     local tpPosition = CFrame.new(item.position + teleportOffset)
-    
-    -- Use a safer teleport approach
     pcall(function()
         Character():SetPrimaryPartCFrame(tpPosition)
     end)
-    
-    -- Make sure we're actually there
+
     task.wait(0.5)
-    
-    -- If we're not close enough, try direct teleport
     if (HRP().Position - (item.position + teleportOffset)).Magnitude > 10 then
         HRP().CFrame = tpPosition
         task.wait(0.3)
     end
-    
-    -- Stay under the item and attempt pickup
+
     updateGUI(item.name, "Holding E...", "Holding for " .. pickupHoldTime .. "s")
-    
-    -- Simulate holding E key (long press)
     holdEKey(pickupHoldTime)
-    
-    -- Additional wait for pickup registration
     task.wait(itemPickupTime - pickupHoldTime)
-    
-    -- Verify pickup worked by checking inventory
+
     local afterCount = 0
     pcall(function()
         for _, tool in pairs(Player.Backpack:GetChildren()) do
@@ -358,71 +336,68 @@ local function pickupItem(item)
             end
         end
     end)
-    
+
     local pickupWorked = (afterCount > beforeCount)
     updateGUI(item.name, "Pickup " .. (pickupWorked and "Success!" or "Failed!"))
-    
-    -- Try again if pickup failed
     if not pickupWorked and item.prompt and item.prompt.Parent then
         updateGUI(item.name, "Retrying pickup...", "Second attempt")
         holdEKey(pickupHoldTime)
         task.wait(0.3)
     end
-    
-    -- Return to safe spot more slowly
+
     updateGUI(item.name, "Returning...", "Going to safe spot")
     task.wait(0.2)
-    
     pcall(function()
         Character():SetPrimaryPartCFrame(ReturnSpot)
     end)
-    
-    -- Backup teleport if the above fails
     if (HRP().Position - ReturnSpot.Position).Magnitude > 10 then
         HRP().CFrame = ReturnSpot
     end
-    
+
     toggleNoclip(false)
-    
-    -- Wait between item pickups to avoid detection
+
+    -- Instant sell after pickup if new item is in inventory
+    if pickupWorked then
+        task.spawn(function()
+            -- Call the quick sell function
+            performQuickSell()
+        end)
+    end
+
     task.wait(betweenItemDelay)
     updateGUI(nil, "Idle", "Ready for next action")
 end
 
 -- Immediate item equip and sell function
 local function equipAndSellItem(tool)
-    if not tool or not Character():FindFirstChild("Humanoid") then return false end
-    
-    -- Equip the item
+    if not tool or not Character():FindFirstChild("Humanoid") then 
+        return false 
+    end
+
     Character().Humanoid:EquipTool(tool)
-    
-    -- Wait for equip to complete
     local equipStartTime = tick()
     while not Character():FindFirstChild(tool.Name) and tick() - equipStartTime < 1 do
         task.wait(0.1)
     end
-    
-    -- If equipped successfully, sell it
+
     if Character():FindFirstChild(tool.Name) then
         Character().RemoteEvent:FireServer("EndDialogue", {
             NPC = "Merchant",
             Dialogue = "Dialogue5",
             Option = "Option2"
         })
-        task.wait(0.35) -- Wait for sell to complete
+        task.wait(0.35)
         return true
     end
-    
+
     return false
 end
 
 -- Fast Auto Sell function (revised)
-local function performQuickSell()
+function performQuickSell()
     if not AutoSell then return end
-    
+
     updateGUI(nil, "Selling items...", "Starting sell process")
-    
-    -- Group items to sell by type for faster processing
     local itemsToSell = {}
     for item, sell in pairs(SellItems) do
         if sell then
@@ -433,35 +408,29 @@ local function performQuickSell()
             end
         end
     end
-    
+
     local successCount = 0
-    
-    -- Process each item individually
     for i, tool in ipairs(itemsToSell) do
         updateGUI(nil, "Selling " .. tool.Name, i .. "/" .. #itemsToSell)
         if equipAndSellItem(tool) then
             successCount = successCount + 1
         end
     end
-    
     updateGUI(nil, "Sold " .. successCount .. " items", "Complete")
     task.wait(0.5)
 end
 
 -- Farming loop
 while true do
-    -- Check if character is available before proceeding
     if not Player.Character or not Player.Character:FindFirstChild("HumanoidRootPart") then
         task.wait(1)
         updateGUI(nil, "Waiting for character...", "No character found")
         continue
     end
-    
-    -- Process tracked items
+
     local itemsProcessed = 0
     local validItems = {}
-    
-    -- First, filter out invalid items and sort by priority
+
     for i = #trackedItems, 1, -1 do
         local item = trackedItems[i]
         if not item.prompt or not item.prompt.Parent then
@@ -471,19 +440,14 @@ while true do
             table.remove(trackedItems, i)
         end
     end
-    
-    -- Only process one item per cycle to avoid kicks
+
     if #validItems > 0 then
         pickupItem(validItems[1])
         itemsProcessed = 1
     end
-    
-    -- Only sell if we aren't currently picking up items
+
     if itemsProcessed == 0 then
-        -- Sell items
         performQuickSell()
-        
-        -- Buy Lucky Arrows
         if BuyLucky and PlayerStats.Money.Value >= 50000 then
             updateGUI(nil, "Buying Lucky Arrow...", "Money: " .. PlayerStats.Money.Value)
             pcall(function()
@@ -491,14 +455,12 @@ while true do
             end)
             task.wait(0.3)
         end
-        
-        -- If nothing to do, wait longer
+
         if #trackedItems == 0 then
             updateGUI(nil, "Searching for items...", "No items found: " .. #trackedItems)
             task.wait(3)
         end
     end
-    
-    -- Short wait between cycles
+
     task.wait(0.5)
 end
