@@ -1,75 +1,18 @@
--- PigletHUB Autofarm for Your Bizarre Adventure (YBA)
--- By: You 🐷
-
 -- Services
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TeleportService = game:GetService("TeleportService")
 local MarketplaceService = game:GetService("MarketplaceService")
+local TeleportService = game:GetService("TeleportService")
 local Player = Players.LocalPlayer
 local Character = function() return Player.Character or Player.CharacterAdded:Wait() end
 local HRP = function() return Character():WaitForChild("HumanoidRootPart") end
-local PlayerStats = Player:WaitForChild("PlayerStats")
 
--- GUI Setup
-local function createGUI()
-    if Player:FindFirstChild("PlayerGui"):FindFirstChild("PigletHUB") then
-        Player.PlayerGui.PigletHUB:Destroy()
-    end
-
-    local gui = Instance.new("ScreenGui", Player.PlayerGui)
-    gui.Name = "PigletHUB"
-    gui.ResetOnSpawn = false
-
-    local frame = Instance.new("Frame", gui)
-    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    frame.Size = UDim2.new(0, 250, 0, 100)
-    frame.Position = UDim2.new(0, 10, 0, 10)
-    frame.BorderSizePixel = 0
-    frame.BackgroundTransparency = 0.2
-    frame.Name = "Main"
-
-    local title = Instance.new("TextLabel", frame)
-    title.Text = "PigletHUB"
-    title.Font = Enum.Font.SourceSansBold
-    title.TextSize = 20
-    title.TextColor3 = Color3.new(1, 1, 1)
-    title.BackgroundTransparency = 1
-    title.Size = UDim2.new(1, 0, 0, 20)
-
-    local itemText = Instance.new("TextLabel", frame)
-    itemText.Text = "Item: None"
-    itemText.Name = "Item"
-    itemText.TextSize = 16
-    itemText.Font = Enum.Font.SourceSans
-    itemText.TextColor3 = Color3.fromRGB(255, 255, 255)
-    itemText.Position = UDim2.new(0, 0, 0, 30)
-    itemText.Size = UDim2.new(1, 0, 0, 20)
-    itemText.BackgroundTransparency = 1
-
-    local moneyText = Instance.new("TextLabel", frame)
-    moneyText.Text = "Money: ..."
-    moneyText.Name = "Money"
-    moneyText.TextSize = 16
-    moneyText.Font = Enum.Font.SourceSans
-    moneyText.TextColor3 = Color3.fromRGB(255, 255, 0)
-    moneyText.Position = UDim2.new(0, 0, 0, 55)
-    moneyText.Size = UDim2.new(1, 0, 0, 20)
-    moneyText.BackgroundTransparency = 1
-end
-
-createGUI()
-Player.CharacterAdded:Connect(createGUI)
-
--- Config
-local ReturnSpot = CFrame.new(978, -42, -49)
-local serverHopTime = 105
-local teleportOffset = Vector3.new(0, -2.25, 0)
+-- Settings
 local BuyLucky = true
 local AutoSell = true
-
--- Inventory caps
+local ReturnSpot = CFrame.new(978, -42, -49)
+local ServerHopTimer = 105
 local ItemCaps = {
     ["Gold Coin"] = 45, ["Rokakaka"] = 25, ["Pure Rokakaka"] = 10,
     ["Mysterious Arrow"] = 25, ["Diamond"] = 30, ["Ancient Scroll"] = 10,
@@ -88,11 +31,11 @@ local SellItems = {
 }
 
 -- Double item cap check
-local has2x = false
 pcall(function()
-    has2x = MarketplaceService:UserOwnsGamePassAsync(Player.UserId, 14597778)
+    if MarketplaceService:UserOwnsGamePassAsync(Player.UserId, 14597778) then
+        for k, v in pairs(ItemCaps) do ItemCaps[k] = v * 2 end
+    end
 end)
-if has2x then for k, v in pairs(ItemCaps) do ItemCaps[k] = v * 2 end end
 
 -- Helpers
 local function toggleNoclip(state)
@@ -109,17 +52,43 @@ local function hasMax(item)
     return (ItemCaps[item] or 9999) <= count
 end
 
--- Update GUI
-local function updateGUI(item)
-    local gui = Player.PlayerGui:FindFirstChild("PigletHUB")
-    if gui then
-        gui.Main.Item.Text = "Item: " .. (item or "None")
-        local cash = math.floor(PlayerStats.Money.Value)
-        gui.Main.Money.Text = "Money: $" .. tostring(cash)
+local function equipTool(item)
+    local tool = Player.Backpack:FindFirstChild(item)
+    if tool then
+        Character().Humanoid:EquipTool(tool)
+        task.wait(0.1)
     end
 end
 
--- Item tracker
+-- GUI
+local ScreenGui = Instance.new("ScreenGui", Player:WaitForChild("PlayerGui"))
+ScreenGui.Name = "PigletHUB"
+local MainFrame = Instance.new("Frame", ScreenGui)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.Position = UDim2.new(1, -210, 0, 10)
+MainFrame.Size = UDim2.new(0, 200, 0, 60)
+MainFrame.BorderSizePixel = 0
+MainFrame.BackgroundTransparency = 0.2
+
+local Title = Instance.new("TextLabel", MainFrame)
+Title.Size = UDim2.new(1, 0, 0.3, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "PigletHUB"
+Title.TextColor3 = Color3.fromRGB(255, 105, 180)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 18
+
+local Info = Instance.new("TextLabel", MainFrame)
+Info.Position = UDim2.new(0, 0, 0.3, 0)
+Info.Size = UDim2.new(1, 0, 0.7, 0)
+Info.BackgroundTransparency = 1
+Info.TextColor3 = Color3.fromRGB(255, 255, 255)
+Info.Font = Enum.Font.Gotham
+Info.TextSize = 14
+Info.TextWrapped = true
+Info.Text = "Waiting..."
+
+-- Item tracking
 local ItemFolder = Workspace:WaitForChild("Item_Spawns"):WaitForChild("Items")
 local trackedItems = {}
 
@@ -136,83 +105,99 @@ local function trackItem(itemModel)
     end
 end
 
--- Track new items
+for _, child in pairs(ItemFolder:GetChildren()) do
+    trackItem(child)
+end
+
 ItemFolder.ChildAdded:Connect(function(child)
     task.wait(0.5)
     pcall(function() trackItem(child) end)
 end)
 
--- Press play
+-- Startup
+pcall(function() Player:WaitForChild("PlayerGui"):WaitForChild("LoadingScreen1"):Destroy() end)
+pcall(function() Player.PlayerGui:WaitForChild("LoadingScreen"):Destroy() end)
+pcall(function() Workspace:FindFirstChild("LoadingScreen").Song:Destroy() end)
+
 repeat task.wait() until Character():FindFirstChild("RemoteEvent")
 Character().RemoteEvent:FireServer("PressedPlay")
 HRP().CFrame = ReturnSpot
 task.wait(2)
 
--- Server hop function
-local function serverHop()
-    local servers = {}
-    local req = game:HttpGet("https://games.roblox.com/v1/games/2809202155/servers/Public?sortOrder=Asc&limit=100")
-    local data = game:GetService("HttpService"):JSONDecode(req)
-    for _, s in pairs(data.data) do
-        if s.playing < s.maxPlayers then
-            table.insert(servers, s.id)
-        end
-    end
-    if #servers > 0 then
-        TeleportService:TeleportToPlaceInstance(game.PlaceId, servers[math.random(1, #servers)], Player)
-    end
-end
-
--- Serverhop countdown
+-- Serverhop logic
 task.spawn(function()
     while true do
-        task.wait(serverHopTime)
-        serverHop()
+        task.wait(ServerHopTimer)
+        local servers = game.HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100"))
+        for _, server in pairs(servers.data) do
+            if server.playing < server.maxPlayers then
+                TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id, Player)
+                return
+            end
+        end
     end
 end)
 
--- Farming loop
-while true do
-    for i = #trackedItems, 1, -1 do
-        local item = trackedItems[i]
-        if item.prompt and item.prompt.Parent and not hasMax(item.name) then
-            if (HRP().Position - item.position).Magnitude > 75 then -- max safe pickup distance
+-- Item farming
+task.spawn(function()
+    while true do
+        for i = #trackedItems, 1, -1 do
+            local item = trackedItems[i]
+            if item.prompt and item.prompt.Parent and not hasMax(item.name) then
                 toggleNoclip(true)
-                local tpPosition = CFrame.new(item.position + teleportOffset)
-                HRP().CFrame = tpPosition
-                updateGUI(item.name)
-                task.wait(0.5)
+                local underItem = CFrame.new(item.position.X, item.position.Y - 2.2, item.position.Z)
+                HRP().CFrame = underItem
+                Info.Text = "Teleporting to: " .. item.name
+
+                task.wait(0.35)
                 pcall(function() fireproximityprompt(item.prompt) end)
                 task.wait(0.3)
                 HRP().CFrame = ReturnSpot
+                Info.Text = "Picked: " .. item.name
                 toggleNoclip(false)
             end
+            table.remove(trackedItems, i)
         end
-        table.remove(trackedItems, i)
+        Info.Text = "Waiting..."
+        task.wait(2)
     end
+end)
 
-    -- Sell items
-    if AutoSell then
+-- AutoSell
+task.spawn(function()
+    while true do
         for item, sell in pairs(SellItems) do
             local tool = Player.Backpack:FindFirstChild(item)
             if sell and tool then
-                Character().Humanoid:EquipTool(tool)
+                equipTool(item)
                 Character().RemoteEvent:FireServer("EndDialogue", {
                     NPC = "Merchant",
                     Dialogue = "Dialogue5",
                     Option = "Option2"
                 })
-                task.wait(0.35)
+                task.wait(0.2)
             end
         end
+        task.wait(5)
     end
+end)
 
-    -- Buy Lucky Arrows
-    if BuyLucky and PlayerStats.Money.Value >= 50000 then
-        Character().RemoteEvent:FireServer("PurchaseShopItem", {ItemName = "1x Lucky Arrow"})
-        task.wait(0.3)
-    end
-
-    updateGUI(nil)
-    task.wait(3)
+-- Lucky Arrow Buy
+if BuyLucky then
+    local money = Player:WaitForChild("PlayerStats"):WaitForChild("Money")
+    money:GetPropertyChangedSignal("Value"):Connect(function()
+        Info.Text = "Money: " .. tostring(math.floor(money.Value))
+    end)
+    task.spawn(function()
+        while true do
+            if money.Value >= 50000 then
+                Character().RemoteEvent:FireServer("PurchaseShopItem", {
+                    ItemName = "1x Lucky Arrow"
+                })
+                task.wait(0.3)
+            else
+                task.wait(5)
+            end
+        end
+    end)
 end
