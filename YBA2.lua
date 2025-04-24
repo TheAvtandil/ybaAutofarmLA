@@ -118,7 +118,8 @@ local function safeTeleportTo(pos)
     local success = pcall(function()
         HRP().CFrame = CFrame.new(pos + teleportOffset)
     end)
-    task.wait(0.2)
+    updateGUI("Teleporting...", "")
+    task.wait(0.5)
     return success
 end
 
@@ -134,22 +135,27 @@ end
 local trackedItems = {}
 local function trackItem(itemModel)
     local prompt = itemModel:FindFirstChildWhichIsA("ProximityPrompt", true)
-    if prompt and prompt.ObjectText and itemModel.PrimaryPart then
+    local part = itemModel:FindFirstChild("Handle") or itemModel.PrimaryPart or itemModel:FindFirstChildWhichIsA("BasePart")
+    if prompt and prompt.ObjectText and part then
         table.insert(trackedItems, {
             name = prompt.ObjectText,
-            position = itemModel.PrimaryPart.Position,
+            position = part.Position,
             prompt = prompt
         })
     end
 end
 
 local itemFolder = Workspace:WaitForChild("Item_Spawns"):WaitForChild("Items")
-for _, item in pairs(itemFolder:GetChildren()) do
-    pcall(function() trackItem(item) end)
+for _, item in pairs(itemFolder:GetDescendants()) do
+    if item:IsA("Model") then
+        pcall(function() trackItem(item) end)
+    end
 end
-itemFolder.ChildAdded:Connect(function(item)
-    task.wait(0.5)
-    pcall(function() trackItem(item) end)
+itemFolder.DescendantAdded:Connect(function(item)
+    if item:IsA("Model") then
+        task.wait(0.5)
+        pcall(function() trackItem(item) end)
+    end
 end)
 
 -- Sell Setup
@@ -185,15 +191,17 @@ while true do
         if item.prompt and item.prompt.Parent then
             toggleNoclip(true)
             if safeTeleportTo(item.position) then
+                updateGUI("Holding E", item.name)
                 holdEKey(1.2)
                 firePrompt(item.prompt)
-                task.wait(0.2)
-                updateGUI("Collected", item.name)
-                task.wait(1.2)
+                task.wait(0.4)
+                updateGUI("Returning", item.name)
                 pcall(function() HRP().CFrame = ReturnSpot end)
                 toggleNoclip(false)
                 task.wait(1.5)
             end
+        else
+            updateGUI("Invalid prompt", item.name)
         end
     end
     task.wait(1)
@@ -203,12 +211,19 @@ end
 spawn(function()
     while true do
         task.wait(serverHopTime)
-        local data = HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. PLACE_ID .. "/servers/Public?sortOrder=Asc&limit=100"))
-        for _, server in ipairs(data.data) do
-            if server.id ~= game.JobId and server.playing < server.maxPlayers then
-                TeleportService:TeleportToPlaceInstance(PLACE_ID, server.id, Player)
-                break
+        local success, data = pcall(function()
+            return HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. PLACE_ID .. "/servers/Public?sortOrder=Asc&limit=100"))
+        end)
+        if success and data and data.data then
+            for _, server in ipairs(data.data) do
+                if server.id ~= game.JobId and server.playing < server.maxPlayers then
+                    updateGUI("Server Hop", "Joining new server")
+                    TeleportService:TeleportToPlaceInstance(PLACE_ID, server.id, Player)
+                    break
+                end
             end
+        else
+            updateGUI("Hop Failed", "Retrying next cycle")
         end
     end
 end)
