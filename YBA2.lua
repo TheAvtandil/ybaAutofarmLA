@@ -1,139 +1,193 @@
-if game.PlaceId ~= 2809202155 then return end
-
--- CONFIG
-local SELL_BLACKLIST = {
-    ["Lucky Arrow"] = true,
-    ["DIO's Diary"] = false,
-    ["Rokakaka"] = false, -- sell this if you want
-    ["Mysterious Arrow"] = false,
-}
-local TELEPORT_DELAY = 1.4
-local RETURN_POSITION = CFrame.new(-334, 12, 425) -- Hidden safe spot
-local SERVERHOP_INTERVAL = 105
-
--- SERVICES
+-- PigletHUB Autofarm for Your Bizarre Adventure (YBA)
+-- Services
+local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TeleportService = game:GetService("TeleportService")
+local MarketplaceService = game:GetService("MarketplaceService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 local HttpService = game:GetService("HttpService")
-local LocalPlayer = Players.LocalPlayer
-local Backpack = LocalPlayer:WaitForChild("Backpack")
 
--- GUI
-local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
-ScreenGui.Name = "PigletHUB"
+local Player = Players.LocalPlayer
+local Character = function() return Player.Character or Player.CharacterAdded:Wait() end
+local HRP = function() return Character():WaitForChild("HumanoidRootPart") end
+local PlayerStats = Player:WaitForChild("PlayerStats")
 
-local Frame = Instance.new("Frame", ScreenGui)
-Frame.Size = UDim2.new(0, 300, 0, 200)
-Frame.Position = UDim2.new(0, 10, 0, 10)
-Frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-Frame.BackgroundTransparency = 0.2
-Frame.BorderSizePixel = 0
-Frame.ClipsDescendants = true
+-- Configuration
+local PLACE_ID = 2809202155
+local ReturnSpot = CFrame.new(978, -42, -49)
+local teleportOffset = Vector3.new(0, -6, 0)
+local serverHopTime = 105
+local AutoSell = true
+local BuyLucky = true
 
-local Title = Instance.new("TextLabel", Frame)
-Title.Size = UDim2.new(1, 0, 0, 25)
-Title.Text = "PigletHUB Item Log"
-Title.BackgroundTransparency = 1
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.Font = Enum.Font.GothamBold
-Title.TextSize = 16
+-- GUI Setup
+local function createGUI()
+    local gui = Instance.new("ScreenGui", Player:WaitForChild("PlayerGui"))
+    gui.Name = "PigletHUB"
+    gui.ResetOnSpawn = false
 
-local ScrollingFrame = Instance.new("ScrollingFrame", Frame)
-ScrollingFrame.Position = UDim2.new(0, 0, 0, 25)
-ScrollingFrame.Size = UDim2.new(1, 0, 1, -25)
-ScrollingFrame.CanvasSize = UDim2.new(0, 0, 10, 0)
-ScrollingFrame.ScrollBarThickness = 4
-ScrollingFrame.BackgroundTransparency = 1
+    local frame = Instance.new("Frame", gui)
+    frame.Name = "Main"
+    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    frame.BackgroundTransparency = 0.2
+    frame.BorderSizePixel = 0
+    frame.Position = UDim2.new(0, 10, 0, 10)
+    frame.Size = UDim2.new(0, 250, 0, 150)
 
-local function logItem(msg)
-    local label = Instance.new("TextLabel", ScrollingFrame)
-    label.Size = UDim2.new(1, -10, 0, 20)
-    label.Position = UDim2.new(0, 5, 0, #ScrollingFrame:GetChildren() * 20)
-    label.Text = msg
-    label.TextColor3 = Color3.fromRGB(255, 255, 255)
-    label.Font = Enum.Font.Gotham
-    label.TextSize = 14
-    label.BackgroundTransparency = 1
-    ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, #ScrollingFrame:GetChildren() * 20)
+    local title = Instance.new("TextLabel", frame)
+    title.Text = "PigletHUB"
+    title.Font = Enum.Font.SourceSansBold
+    title.TextSize = 20
+    title.TextColor3 = Color3.new(1, 1, 1)
+    title.BackgroundTransparency = 1
+    title.Size = UDim2.new(1, 0, 0, 20)
+
+    local itemLog = Instance.new("TextLabel", frame)
+    itemLog.Name = "ItemLog"
+    itemLog.Text = "Item Log:\n"
+    itemLog.TextWrapped = true
+    itemLog.TextYAlignment = Enum.TextYAlignment.Top
+    itemLog.Font = Enum.Font.SourceSans
+    itemLog.TextSize = 14
+    itemLog.TextColor3 = Color3.fromRGB(200, 200, 200)
+    itemLog.BackgroundTransparency = 1
+    itemLog.Position = UDim2.new(0, 0, 0, 25)
+    itemLog.Size = UDim2.new(1, 0, 0, 80)
+
+    local moneyText = Instance.new("TextLabel", frame)
+    moneyText.Name = "Money"
+    moneyText.Text = "Money: ..."
+    moneyText.Font = Enum.Font.SourceSans
+    moneyText.TextSize = 14
+    moneyText.TextColor3 = Color3.fromRGB(255, 255, 0)
+    moneyText.BackgroundTransparency = 1
+    moneyText.Position = UDim2.new(0, 0, 0, 110)
+    moneyText.Size = UDim2.new(1, 0, 0, 20)
+
+    local statusText = Instance.new("TextLabel", frame)
+    statusText.Name = "Status"
+    statusText.Text = "Status: Idle"
+    statusText.Font = Enum.Font.SourceSans
+    statusText.TextSize = 14
+    statusText.TextColor3 = Color3.fromRGB(0, 255, 0)
+    statusText.BackgroundTransparency = 1
+    statusText.Position = UDim2.new(0, 0, 0, 130)
+    statusText.Size = UDim2.new(1, 0, 0, 20)
 end
 
--- TELEPORT
-local function safeTP(cf)
-    local HumanoidRootPart = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if HumanoidRootPart then
-        HumanoidRootPart.CFrame = cf
-    end
-end
+createGUI()
 
--- ITEM DETECTION
-local function getItems()
-    local items = {}
-    for _, v in ipairs(workspace:GetDescendants()) do
-        if v:IsA("Part") and v.Name == "TouchInterest" and v.Parent and v.Parent:FindFirstChild("ClickDetector") then
-            table.insert(items, v.Parent)
+-- Utils
+local function updateGUI(status, itemName)
+    local gui = Player:FindFirstChild("PlayerGui") and Player.PlayerGui:FindFirstChild("PigletHUB")
+    if gui then
+        if status then gui.Main.Status.Text = "Status: " .. status end
+        if itemName then
+            gui.Main.ItemLog.Text = gui.Main.ItemLog.Text .. "\nPicked: " .. itemName
+            gui.Main.Money.Text = "Money: $" .. math.floor(PlayerStats.Money.Value)
         end
     end
-    return items
 end
 
--- ITEM PICKUP
-local function pickup(item)
-    local cf = item.CFrame * CFrame.new(0, -3, 0)
-    safeTP(cf)
-    task.wait(TELEPORT_DELAY)
-    fireclickdetector(item:FindFirstChild("ClickDetector"))
-    logItem("Picked up: " .. item.Name)
-    task.wait(0.4)
-    safeTP(RETURN_POSITION)
+local function holdEKey(duration)
+    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+    task.wait(duration)
+    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
 end
 
--- AUTO SELL
-Backpack.ChildAdded:Connect(function(child)
-    task.wait(0.5)
-    if not SELL_BLACKLIST[child.Name] then
-        local sellRemote = game:GetService("ReplicatedStorage"):FindFirstChild("Remotes", true):FindFirstChild("SellItem")
-        if sellRemote then
-            sellRemote:FireServer(child.Name)
-            logItem("Sold: " .. child.Name)
+local function safeTeleportTo(pos)
+    local success = pcall(function()
+        Character():SetPrimaryPartCFrame(CFrame.new(pos + teleportOffset))
+    end)
+    task.wait(1.4) -- Wait under item
+    return success
+end
+
+local function toggleNoclip(state)
+    for _, p in pairs(Character():GetDescendants()) do
+        if p:IsA("BasePart") then
+            p.CanCollide = not state
         end
-    else
-        logItem("Kept: " .. child.Name)
     end
-end)
+end
 
--- SERVER HOP
-task.spawn(function()
-    while task.wait(SERVERHOP_INTERVAL) do
-        local servers = {}
-        local req = request({
-            Url = "https://games.roblox.com/v1/games/2809202155/servers/Public?sortOrder=Asc&limit=100",
+-- Track Items
+local trackedItems = {}
+local function trackItem(itemModel)
+    local prompt = itemModel:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if prompt and prompt.ObjectText and itemModel.PrimaryPart then
+        table.insert(trackedItems, {
+            name = prompt.ObjectText,
+            position = itemModel.PrimaryPart.Position,
+            prompt = prompt
         })
-        local body = HttpService:JSONDecode(req.Body)
-        for _, server in pairs(body.data) do
-            if server.playing < server.maxPlayers then
-                table.insert(servers, server.id)
-            end
-        end
-        if #servers > 0 then
-            TeleportService:TeleportToPlaceInstance(2809202155, servers[math.random(1, #servers)], LocalPlayer)
-        end
+    end
+end
+
+local itemFolder = Workspace:WaitForChild("Item_Spawns"):WaitForChild("Items")
+for _, item in pairs(itemFolder:GetChildren()) do
+    pcall(function() trackItem(item) end)
+end
+itemFolder.ChildAdded:Connect(function(item)
+    task.wait(0.5)
+    pcall(function() trackItem(item) end)
+end)
+
+-- Sell Setup
+local SellItems = {
+    ["Gold Coin"] = true, ["Rokakaka"] = true, ["Pure Rokakaka"] = true,
+    ["Mysterious Arrow"] = true, ["Diamond"] = true, ["Ancient Scroll"] = true,
+    ["Caesar's Headband"] = true, ["Stone Mask"] = true,
+    ["Rib Cage of The Saint's Corpse"] = true, ["Quinton's Glove"] = true,
+    ["Zeppeli's Hat"] = true, ["Clackers"] = true, ["Steel Ball"] = true,
+    ["Dio's Diary"] = true -- Lucky Arrow intentionally excluded
+}
+
+-- Inventory Watch
+Player.Backpack.ChildAdded:Connect(function(child)
+    if SellItems[child.Name] then
+        task.wait(0.1)
+        Character().Humanoid:EquipTool(child)
+        task.wait(0.1)
+        Character().RemoteEvent:FireServer("EndDialogue", {
+            NPC = "Merchant",
+            Dialogue = "Dialogue5",
+            Option = "Option2"
+        })
+        task.wait(0.3)
     end
 end)
 
--- FARM LOOP
-task.spawn(function()
-    while task.wait(1.5) do
-        local found = getItems()
-        for _, item in ipairs(found) do
-            if item:FindFirstChild("ClickDetector") then
-                pickup(item)
-                task.wait(0.5)
+-- Item Collection Loop
+while true do
+    for i = #trackedItems, 1, -1 do
+        local item = trackedItems[i]
+        table.remove(trackedItems, i)
+        if item.prompt and item.prompt.Parent then
+            toggleNoclip(true)
+            if safeTeleportTo(item.position) then
+                holdEKey(1.2)
+                updateGUI("Collected", item.name)
+                pcall(function() HRP().CFrame = ReturnSpot end)
+                toggleNoclip(false)
+                task.wait(2)
+            end
+        end
+    end
+    task.wait(1)
+end
+
+-- Server Hop Logic
+spawn(function()
+    while true do
+        task.wait(serverHopTime)
+        local data = HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. PLACE_ID .. "/servers/Public?sortOrder=Asc&limit=100"))
+        for _, server in ipairs(data.data) do
+            if server.id ~= game.JobId and server.playing < server.maxPlayers then
+                TeleportService:TeleportToPlaceInstance(PLACE_ID, server.id, Player)
+                break
             end
         end
     end
 end)
-
--- ANTI-KICK
-local oldKick
-oldKick = hookfunction(LocalPlayer.Kick, function(...) return end)
