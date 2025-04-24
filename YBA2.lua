@@ -96,6 +96,12 @@ local function holdEKey(duration)
     VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
 end
 
+local function firePrompt(prompt)
+    if prompt and typeof(prompt) == "Instance" and prompt:IsA("ProximityPrompt") then
+        fireproximityprompt(prompt)
+    end
+end
+
 local function safeTeleportTo(pos)
     local success = pcall(function()
         Character():SetPrimaryPartCFrame(CFrame.new(pos + teleportOffset))
@@ -168,9 +174,10 @@ while true do
             toggleNoclip(true)
             if safeTeleportTo(item.position) then
                 holdEKey(1.2)
+                firePrompt(item.prompt)
                 task.wait(0.2)
                 updateGUI("Collected", item.name)
-                task.wait(0.2)
+                task.wait(1.2)
                 pcall(function() HRP().CFrame = ReturnSpot end)
                 toggleNoclip(false)
                 task.wait(1.5)
