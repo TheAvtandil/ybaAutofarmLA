@@ -7,6 +7,7 @@ local TeleportService = game:GetService("TeleportService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local HttpService = game:GetService("HttpService")
+local CoreGui = game:GetService("CoreGui")
 
 local Player = Players.LocalPlayer
 local Character = function() return Player.Character or Player.CharacterAdded:Wait() end
@@ -23,9 +24,10 @@ local BuyLucky = true
 
 -- GUI Setup
 local function createGUI()
-    local gui = Instance.new("ScreenGui", Player:WaitForChild("PlayerGui"))
+    local gui = Instance.new("ScreenGui")
     gui.Name = "PigletHUB"
     gui.ResetOnSpawn = false
+    gui.Parent = Player:WaitForChild("PlayerGui")
 
     local frame = Instance.new("Frame", gui)
     frame.Name = "Main"
@@ -77,6 +79,16 @@ local function createGUI()
 end
 
 createGUI()
+
+-- Rejoin after kick
+local function autoRejoin()
+    game:GetService("Players").LocalPlayer.OnTeleport:Connect(function(state)
+        if state == Enum.TeleportState.Failed or state == Enum.TeleportState.Started then
+            TeleportService:Teleport(PLACE_ID, Player)
+        end
+    end)
+end
+autoRejoin()
 
 -- Utils
 local function updateGUI(status, itemName)
