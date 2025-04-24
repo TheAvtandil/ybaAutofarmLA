@@ -7,20 +7,24 @@ local TeleportService = game:GetService("TeleportService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local HttpService = game:GetService("HttpService")
+local CoreGui = game:GetService("CoreGui")
+
 local Player = Players.LocalPlayer
 local Character = function() return Player.Character or Player.CharacterAdded:Wait() end
 local HRP = function() return Character():WaitForChild("HumanoidRootPart") end
 local PlayerStats = Player:WaitForChild("PlayerStats")
 
--- Config
+-- Configuration
 local PLACE_ID = 2809202155
 local ReturnSpot = CFrame.new(978, -42, -49)
 local teleportOffset = Vector3.new(0, -6, 0)
 local serverHopTime = 105
+local AutoSell = true
+local BuyLucky = true
 local teleportStepTime = 0.07
 local teleportStepDistance = 25
 
--- GUI
+-- GUI Setup
 local function createGUI()
     local gui = Instance.new("ScreenGui", Player:WaitForChild("PlayerGui"))
     gui.Name = "PigletHUB"
@@ -74,17 +78,6 @@ local function createGUI()
 end
 createGUI()
 
-local function updateGUI(status, itemName)
-    local gui = Player.PlayerGui:FindFirstChild("PigletHUB")
-    if gui then
-        if status then gui.Main.Status.Text = "Status: " .. status end
-        if itemName then
-            gui.Main.ItemLog.Text = gui.Main.ItemLog.Text .. "\nPicked: " .. itemName
-            gui.Main.Money.Text = "Money: $" .. math.floor(PlayerStats.Money.Value)
-        end
-    end
-end
-
 -- Smooth teleport
 local function safeTeleportTo(pos)
     local start = HRP().Position
@@ -98,7 +91,6 @@ local function safeTeleportTo(pos)
         HRP().CFrame = CFrame.new(stepPos)
         task.wait(teleportStepTime)
     end
-    return true
 end
 
 local function holdEKey(duration)
@@ -113,60 +105,6 @@ local function toggleNoclip(state)
     end
 end
 
--- Item Tracking
-local trackedItems = {}
-local ItemFolder = Workspace:WaitForChild("Item_Spawns"):WaitForChild("Items")
-
-local function trackItem(itemModel)
-    if not itemModel:IsA("Model") then return end
-    local prompt = itemModel:FindFirstChildWhichIsA("ProximityPrompt", true)
-    local part = itemModel:FindFirstChild("Handle") or itemModel.PrimaryPart or itemModel:FindFirstChildWhichIsA("BasePart")
-    if prompt and prompt.ObjectText and part then
-        table.insert(trackedItems, {
-            name = prompt.ObjectText,
-            position = part.Position,
-            prompt = prompt
-        })
-    end
-end
-
--- Initial scan
-for _, model in pairs(ItemFolder:GetDescendants()) do
-    if model:IsA("Model") then
-        pcall(function() trackItem(model) end)
-    end
-end
-
--- Listen for new items
-ItemFolder.DescendantAdded:Connect(function(model)
-    if model:IsA("Model") then
-        task.wait(0.5)
-        pcall(function() trackItem(model) end)
-    end
-end)
-
--- Auto Sell Items
-local SellItems = {
-    ["Gold Coin"] = true, ["Rokakaka"] = true, ["Pure Rokakaka"] = true,
-    ["Mysterious Arrow"] = true, ["Diamond"] = true, ["Ancient Scroll"] = true,
-    ["Caesar's Headband"] = true, ["Stone Mask"] = true,
-    ["Rib Cage of The Saint's Corpse"] = true, ["Quinton's Glove"] = true,
-    ["Zeppeli's Hat"] = true, ["Clackers"] = true, ["Steel Ball"] = true,
-    ["Dio's Diary"] = true
-}
-
-Player.Backpack.ChildAdded:Connect(function(child)
-    if SellItems[child.Name] then
-        task.wait(0.1)
-        Character().Humanoid:EquipTool(child)
-        task.wait(0.1)
-        Character().RemoteEvent:FireServer("EndDialogue", {
-            NPC = "Merchant", Dialogue = "Dialogue5", Option = "Option2"
-        })
-        task.wait(0.3)
-    end
-end)
-
 -- Farming Loop
 spawn(function()
     while true do
@@ -175,27 +113,21 @@ spawn(function()
             table.remove(trackedItems, i)
             if item.prompt and item.prompt.Parent then
                 toggleNoclip(true)
-                updateGUI("Teleporting to " .. item.name)
-                if safeTeleportTo(item.position) then
-                    updateGUI("Holding E", item.name)
-                    holdEKey(1.2)
-                    fireproximityprompt(item.prompt)
-                    task.wait(0.4)
-                    updateGUI("Returning", item.name)
-                    HRP().CFrame = ReturnSpot
-                    toggleNoclip(false)
-                    task.wait(1.5)
-                end
-            else
-                updateGUI("Invalid prompt", item.name)
+                safeTeleportTo(item.position)
+                holdEKey(1.2)
+                fireproximityprompt(item.prompt)
+                task.wait(0.4)
+                HRP().CFrame = ReturnSpot
+                toggleNoclip(false)
+                task.wait(1.5)
             end
         end
         task.wait(1)
     end
 end)
 
--- Auto Rejoin
-game.Players.LocalPlayer.OnTeleport:Connect(function(state)
+-- Rejoin on kick
+Player.OnTeleport:Connect(function(state)
     if state == Enum.TeleportState.Failed or state == Enum.TeleportState.Started then
         TeleportService:Teleport(PLACE_ID, Player)
     end
@@ -211,13 +143,36 @@ spawn(function()
         if success and data and data.data then
             for _, server in ipairs(data.data) do
                 if server.id ~= game.JobId and server.playing < server.maxPlayers then
-                    updateGUI("Server Hop", "Joining new server")
                     TeleportService:TeleportToPlaceInstance(PLACE_ID, server.id, Player)
                     break
                 end
             end
-        else
-            updateGUI("Hop Failed", "Retrying next cycle")
         end
+    end
+end)
+
+-- Helper: item tracker reconnect
+local trackedItems = {}
+local ItemFolder = Workspace:WaitForChild("Item_Spawns"):WaitForChild("Items")
+local function trackItem(itemModel)
+    local prompt = itemModel:FindFirstChildWhichIsA("ProximityPrompt", true)
+    local part = itemModel:FindFirstChild("Handle") or itemModel.PrimaryPart or itemModel:FindFirstChildWhichIsA("BasePart")
+    if prompt and prompt.ObjectText and part then
+        table.insert(trackedItems, {
+            name = prompt.ObjectText,
+            position = part.Position,
+            prompt = prompt
+        })
+    end
+end
+for _, model in pairs(ItemFolder:GetDescendants()) do
+    if model:IsA("Model") then
+        pcall(function() trackItem(model) end)
+    end
+end
+ItemFolder.DescendantAdded:Connect(function(model)
+    if model:IsA("Model") then
+        task.wait(0.5)
+        pcall(function() trackItem(model) end)
     end
 end)
