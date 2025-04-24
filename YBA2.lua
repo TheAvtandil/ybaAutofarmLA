@@ -7,6 +7,7 @@ local TeleportService = game:GetService("TeleportService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local HttpService = game:GetService("HttpService")
+local CoreGui = game:GetService("CoreGui")
 
 local Player = Players.LocalPlayer
 local Character = function() return Player.Character or Player.CharacterAdded:Wait() end
@@ -20,14 +21,15 @@ local teleportOffset = Vector3.new(0, -6, 0)
 local serverHopTime = 105
 local AutoSell = true
 local BuyLucky = true
-local teleportStepTime = 0.07
-local teleportStepDistance = 25
+local teleportStepTime = 0.07 -- slows down teleport in steps
+local teleportStepDistance = 25 -- max studs per step
 
--- GUI
+-- GUI Setup
 local function createGUI()
-    local gui = Instance.new("ScreenGui", Player:WaitForChild("PlayerGui"))
+    local gui = Instance.new("ScreenGui")
     gui.Name = "PigletHUB"
     gui.ResetOnSpawn = false
+    gui.Parent = Player:WaitForChild("PlayerGui")
 
     local frame = Instance.new("Frame", gui)
     frame.Name = "Main"
@@ -78,55 +80,17 @@ end
 
 createGUI()
 
--- Utils
-local function updateGUI(status, itemName)
-    local gui = Player.PlayerGui:FindFirstChild("PigletHUB")
-    if gui then
-        if status then gui.Main.Status.Text = "Status: " .. status end
-        if itemName then
-            gui.Main.ItemLog.Text = gui.Main.ItemLog.Text .. "\nPicked: " .. itemName
-            gui.Main.Money.Text = "Money: $" .. math.floor(PlayerStats.Money.Value)
+-- Rejoin after kick
+local function autoRejoin()
+    game:GetService("Players").LocalPlayer.OnTeleport:Connect(function(state)
+        if state == Enum.TeleportState.Failed or state == Enum.TeleportState.Started then
+            TeleportService:Teleport(PLACE_ID, Player)
         end
-    end
+    end)
 end
+autoRejoin()
 
-local function holdEKey(duration)
-    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-    task.wait(duration)
-    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
-end
-
-local function firePrompt(prompt)
-    if prompt and typeof(prompt) == "Instance" and prompt:IsA("ProximityPrompt") then
-        fireproximityprompt(prompt)
-    end
-end
-
-local function safeTeleportTo(pos)
-    local start = HRP().Position
-    local finish = pos + teleportOffset
-    local direction = (finish - start).Unit
-    local distance = (finish - start).Magnitude
-    local steps = math.ceil(distance / teleportStepDistance)
-    for i = 1, steps do
-        local stepPos = start + direction * teleportStepDistance * i
-        if (stepPos - finish).Magnitude < teleportStepDistance then stepPos = finish end
-        HRP().CFrame = CFrame.new(stepPos)
-        task.wait(teleportStepTime)
-    end
-    updateGUI("Teleporting...", "")
-    return true
-end
-
-local function toggleNoclip(state)
-    for _, p in pairs(Character():GetDescendants()) do
-        if p:IsA("BasePart") then
-            p.CanCollide = not state
-        end
-    end
-end
-
--- Item Tracking
+-- Track Items
 local trackedItems = {}
 local ItemFolder = Workspace:WaitForChild("Item_Spawns"):WaitForChild("Items")
 local function trackItem(itemModel)
@@ -148,7 +112,7 @@ ItemFolder.DescendantAdded:Connect(function(item)
     if item:IsA("Model") then task.wait(0.5) pcall(function() trackItem(item) end) end
 end)
 
--- Auto Sell Setup
+-- Sell Setup
 local SellItems = {
     ["Gold Coin"] = true, ["Rokakaka"] = true, ["Pure Rokakaka"] = true,
     ["Mysterious Arrow"] = true, ["Diamond"] = true, ["Ancient Scroll"] = true,
@@ -170,31 +134,6 @@ Player.Backpack.ChildAdded:Connect(function(child)
         task.wait(0.3)
     end
 end)
-
--- Farming Loop
-while true do
-    for i = #trackedItems, 1, -1 do
-        local item = trackedItems[i]
-        table.remove(trackedItems, i)
-        if item.prompt and item.prompt.Parent then
-            toggleNoclip(true)
-            updateGUI("Teleporting to " .. item.name, "")
-            if safeTeleportTo(item.position) then
-                updateGUI("Holding E", item.name)
-                holdEKey(1.2)
-                firePrompt(item.prompt)
-                task.wait(0.4)
-                updateGUI("Returning", item.name)
-                pcall(function() HRP().CFrame = ReturnSpot end)
-                toggleNoclip(false)
-                task.wait(1.5)
-            end
-        else
-            updateGUI("Invalid prompt", item.name)
-        end
-    end
-    task.wait(1)
-end
 
 -- Server Hop Logic
 spawn(function()
