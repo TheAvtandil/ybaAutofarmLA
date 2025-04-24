@@ -100,7 +100,7 @@ local function safeTeleportTo(pos)
     local success = pcall(function()
         Character():SetPrimaryPartCFrame(CFrame.new(pos + teleportOffset))
     end)
-    task.wait(1.4) -- Wait under item
+    task.wait(0.2)
     return success
 end
 
@@ -141,7 +141,7 @@ local SellItems = {
     ["Caesar's Headband"] = true, ["Stone Mask"] = true,
     ["Rib Cage of The Saint's Corpse"] = true, ["Quinton's Glove"] = true,
     ["Zeppeli's Hat"] = true, ["Clackers"] = true, ["Steel Ball"] = true,
-    ["Dio's Diary"] = true -- Lucky Arrow intentionally excluded
+    ["Dio's Diary"] = true
 }
 
 -- Inventory Watch
@@ -168,10 +168,12 @@ while true do
             toggleNoclip(true)
             if safeTeleportTo(item.position) then
                 holdEKey(1.2)
+                task.wait(0.2)
                 updateGUI("Collected", item.name)
+                task.wait(0.2)
                 pcall(function() HRP().CFrame = ReturnSpot end)
                 toggleNoclip(false)
-                task.wait(2)
+                task.wait(1.5)
             end
         end
     end
