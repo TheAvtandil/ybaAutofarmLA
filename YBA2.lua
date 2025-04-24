@@ -1,142 +1,139 @@
 if game.PlaceId ~= 2809202155 then return end
 
--- Prevent multiple executions
-if getgenv().PigletHUBLoaded then return end
-getgenv().PigletHUBLoaded = true
+-- CONFIG
+local SELL_BLACKLIST = {
+    ["Lucky Arrow"] = true,
+    ["DIO's Diary"] = false,
+    ["Rokakaka"] = false, -- sell this if you want
+    ["Mysterious Arrow"] = false,
+}
+local TELEPORT_DELAY = 1.4
+local RETURN_POSITION = CFrame.new(-334, 12, 425) -- Hidden safe spot
+local SERVERHOP_INTERVAL = 105
 
--- Services
+-- SERVICES
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local TeleportService = game:GetService("TeleportService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
-local CoreGui = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
+local Backpack = LocalPlayer:WaitForChild("Backpack")
 
--- UI
-local gui = Instance.new("ScreenGui", CoreGui)
-gui.Name = "PigletHUB"
-gui.ResetOnSpawn = false
+-- GUI
+local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
+ScreenGui.Name = "PigletHUB"
 
-local mainFrame = Instance.new("Frame", gui)
-mainFrame.Size = UDim2.new(0, 300, 0, 400)
-mainFrame.Position = UDim2.new(0, 10, 0.5, -200)
-mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-mainFrame.BorderSizePixel = 0
+local Frame = Instance.new("Frame", ScreenGui)
+Frame.Size = UDim2.new(0, 300, 0, 200)
+Frame.Position = UDim2.new(0, 10, 0, 10)
+Frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+Frame.BackgroundTransparency = 0.2
+Frame.BorderSizePixel = 0
+Frame.ClipsDescendants = true
 
-local title = Instance.new("TextLabel", mainFrame)
-title.Size = UDim2.new(1, 0, 0, 30)
-title.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-title.Text = "PigletHUB"
-title.TextColor3 = Color3.new(1, 1, 1)
-title.Font = Enum.Font.GothamBold
-title.TextSize = 20
+local Title = Instance.new("TextLabel", Frame)
+Title.Size = UDim2.new(1, 0, 0, 25)
+Title.Text = "PigletHUB Item Log"
+Title.BackgroundTransparency = 1
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 16
 
-local scroll = Instance.new("ScrollingFrame", mainFrame)
-scroll.Position = UDim2.new(0, 0, 0, 30)
-scroll.Size = UDim2.new(1, 0, 1, -30)
-scroll.CanvasSize = UDim2.new(0, 0, 10, 0)
-scroll.BackgroundTransparency = 1
-scroll.ScrollBarThickness = 4
+local ScrollingFrame = Instance.new("ScrollingFrame", Frame)
+ScrollingFrame.Position = UDim2.new(0, 0, 0, 25)
+ScrollingFrame.Size = UDim2.new(1, 0, 1, -25)
+ScrollingFrame.CanvasSize = UDim2.new(0, 0, 10, 0)
+ScrollingFrame.ScrollBarThickness = 4
+ScrollingFrame.BackgroundTransparency = 1
 
-local layout = Instance.new("UIListLayout", scroll)
-layout.SortOrder = Enum.SortOrder.LayoutOrder
-
-local function log(text)
-    local label = Instance.new("TextLabel", scroll)
-    label.Text = "[" .. os.date("%X") .. "] " .. text
-    label.TextColor3 = Color3.new(1, 1, 1)
-    label.Font = Enum.Font.Code
-    label.TextSize = 14
+local function logItem(msg)
+    local label = Instance.new("TextLabel", ScrollingFrame)
     label.Size = UDim2.new(1, -10, 0, 20)
+    label.Position = UDim2.new(0, 5, 0, #ScrollingFrame:GetChildren() * 20)
+    label.Text = msg
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 14
     label.BackgroundTransparency = 1
+    ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, #ScrollingFrame:GetChildren() * 20)
 end
 
--- Item detection + pickup
-local function teleportUnder(position)
-    local char = LocalPlayer.Character
-    if char and char:FindFirstChild("HumanoidRootPart") then
-        local root = char.HumanoidRootPart
-        root.CFrame = CFrame.new(position.X, position.Y - 4, position.Z)
-        task.wait(1.4)
+-- TELEPORT
+local function safeTP(cf)
+    local HumanoidRootPart = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if HumanoidRootPart then
+        HumanoidRootPart.CFrame = cf
     end
 end
 
-local function pressE()
-    local virtualInput = game:GetService("VirtualInputManager")
-    virtualInput:SendKeyEvent(true, "E", false, game)
-    task.wait(0.1)
-    virtualInput:SendKeyEvent(false, "E", false, game)
-end
-
-local function findItems()
+-- ITEM DETECTION
+local function getItems()
     local items = {}
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("Part") and obj.Name == "ItemSpawn" and obj:FindFirstChild("TouchInterest") then
-            table.insert(items, obj)
+    for _, v in ipairs(workspace:GetDescendants()) do
+        if v:IsA("Part") and v.Name == "TouchInterest" and v.Parent and v.Parent:FindFirstChild("ClickDetector") then
+            table.insert(items, v.Parent)
         end
     end
     return items
 end
 
--- Auto sell logic
-local function onInventoryChange()
-    local inv = LocalPlayer:WaitForChild("Backpack"):GetChildren()
-    for _, item in ipairs(inv) do
-        if item:IsA("Tool") then
-            log("Auto-selling: " .. item.Name)
-            ReplicatedStorage.Remotes.SellItem:FireServer(item.Name)
-            task.wait(0.1)
-        end
-    end
+-- ITEM PICKUP
+local function pickup(item)
+    local cf = item.CFrame * CFrame.new(0, -3, 0)
+    safeTP(cf)
+    task.wait(TELEPORT_DELAY)
+    fireclickdetector(item:FindFirstChild("ClickDetector"))
+    logItem("Picked up: " .. item.Name)
+    task.wait(0.4)
+    safeTP(RETURN_POSITION)
 end
 
-LocalPlayer.Backpack.ChildAdded:Connect(onInventoryChange)
-
--- Safe spot
-local safeSpot = CFrame.new(0, -300, 0)
-
--- Anti-kick and respawn handling
-LocalPlayer.CharacterAdded:Connect(function()
-    task.wait(2)
-    LocalPlayer.Character:MoveTo(safeSpot.Position)
+-- AUTO SELL
+Backpack.ChildAdded:Connect(function(child)
+    task.wait(0.5)
+    if not SELL_BLACKLIST[child.Name] then
+        local sellRemote = game:GetService("ReplicatedStorage"):FindFirstChild("Remotes", true):FindFirstChild("SellItem")
+        if sellRemote then
+            sellRemote:FireServer(child.Name)
+            logItem("Sold: " .. child.Name)
+        end
+    else
+        logItem("Kept: " .. child.Name)
+    end
 end)
 
--- Main farming loop
+-- SERVER HOP
 task.spawn(function()
-    while task.wait(1) do
-        local items = findItems()
-        for _, item in ipairs(items) do
-            pcall(function()
-                teleportUnder(item.Position)
-                pressE()
-                log("Attempted to pickup: " .. item.Name)
-                task.wait(0.5)
-                LocalPlayer.Character.HumanoidRootPart.CFrame = safeSpot
-                task.wait(0.5)
-            end)
+    while task.wait(SERVERHOP_INTERVAL) do
+        local servers = {}
+        local req = request({
+            Url = "https://games.roblox.com/v1/games/2809202155/servers/Public?sortOrder=Asc&limit=100",
+        })
+        local body = HttpService:JSONDecode(req.Body)
+        for _, server in pairs(body.data) do
+            if server.playing < server.maxPlayers then
+                table.insert(servers, server.id)
+            end
+        end
+        if #servers > 0 then
+            TeleportService:TeleportToPlaceInstance(2809202155, servers[math.random(1, #servers)], LocalPlayer)
         end
     end
 end)
 
--- Server hopping
+-- FARM LOOP
 task.spawn(function()
-    while true do
-        task.wait(105)
-        local servers = HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100"))
-        for _, server in ipairs(servers.data) do
-            if server.playing < server.maxPlayers and server.id ~= game.JobId then
-                TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id)
-                break
+    while task.wait(1.5) do
+        local found = getItems()
+        for _, item in ipairs(found) do
+            if item:FindFirstChild("ClickDetector") then
+                pickup(item)
+                task.wait(0.5)
             end
         end
     end
 end)
 
--- Auto rejoin if kicked
-game:GetService("Players").PlayerRemoving:Connect(function(player)
-    if player == LocalPlayer then
-        TeleportService:Teleport(game.PlaceId)
-    end
-end)
-
-log("PigletHUB loaded and running.")
+-- ANTI-KICK
+local oldKick
+oldKick = hookfunction(LocalPlayer.Kick, function(...) return end)
