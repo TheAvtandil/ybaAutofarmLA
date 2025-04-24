@@ -21,8 +21,8 @@ local teleportOffset = Vector3.new(0, -6, 0)
 local serverHopTime = 105
 local AutoSell = true
 local BuyLucky = true
-local teleportStepTime = 0.07 -- slows down teleport in steps
-local teleportStepDistance = 25 -- max studs per step
+local teleportStepTime = 0.07
+local teleportStepDistance = 25
 
 -- GUI Setup
 local function createGUI()
@@ -77,63 +77,86 @@ local function createGUI()
     status.BackgroundTransparency = 1
     status.TextColor3 = Color3.fromRGB(0, 255, 0)
 end
-
 createGUI()
 
--- Rejoin after kick
+-- Update GUI
+local function updateGUI(status, itemName)
+    local gui = Player.PlayerGui:FindFirstChild("PigletHUB")
+    if gui then
+        if status then gui.Main.Status.Text = "Status: " .. status end
+        if itemName then
+            gui.Main.ItemLog.Text = gui.Main.ItemLog.Text .. "\nPicked: " .. itemName
+            gui.Main.Money.Text = "Money: $" .. math.floor(PlayerStats.Money.Value)
+        end
+    end
+end
+
+-- Smooth teleport that avoids anti-cheat
+local function safeTeleportTo(pos)
+    local start = HRP().Position
+    local finish = pos + teleportOffset
+    local direction = (finish - start).Unit
+    local distance = (finish - start).Magnitude
+    local steps = math.ceil(distance / teleportStepDistance)
+    for i = 1, steps do
+        local stepPos = start + direction * teleportStepDistance * i
+        if (stepPos - finish).Magnitude < teleportStepDistance then stepPos = finish end
+        HRP().CFrame = CFrame.new(stepPos)
+        task.wait(teleportStepTime)
+    end
+    return true
+end
+
+-- Hold E key simulation
+local function holdEKey(duration)
+    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+    task.wait(duration)
+    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+end
+
+-- Noclip toggler
+local function toggleNoclip(state)
+    for _, p in pairs(Character():GetDescendants()) do
+        if p:IsA("BasePart") then p.CanCollide = not state end
+    end
+end
+
+-- Farming Loop
+spawn(function()
+    while true do
+        for i = #trackedItems, 1, -1 do
+            local item = trackedItems[i]
+            table.remove(trackedItems, i)
+            if item.prompt and item.prompt.Parent then
+                toggleNoclip(true)
+                updateGUI("Teleporting to " .. item.name)
+                if safeTeleportTo(item.position) then
+                    updateGUI("Holding E", item.name)
+                    holdEKey(1.2)
+                    fireproximityprompt(item.prompt)
+                    task.wait(0.4)
+                    updateGUI("Returning", item.name)
+                    HRP().CFrame = ReturnSpot
+                    toggleNoclip(false)
+                    task.wait(1.5)
+                end
+            else
+                updateGUI("Invalid prompt", item.name)
+            end
+        end
+        task.wait(1)
+    end
+end)
+
+-- Rejoin on kick
 local function autoRejoin()
-    game:GetService("Players").LocalPlayer.OnTeleport:Connect(function(state)
+    game.Players.LocalPlayer.OnTeleport:Connect(function(state)
         if state == Enum.TeleportState.Failed or state == Enum.TeleportState.Started then
             TeleportService:Teleport(PLACE_ID, Player)
         end
     end)
 end
 autoRejoin()
-
--- Track Items
-local trackedItems = {}
-local ItemFolder = Workspace:WaitForChild("Item_Spawns"):WaitForChild("Items")
-local function trackItem(itemModel)
-    local prompt = itemModel:FindFirstChildWhichIsA("ProximityPrompt", true)
-    local part = itemModel:FindFirstChild("Handle") or itemModel.PrimaryPart or itemModel:FindFirstChildWhichIsA("BasePart")
-    if prompt and prompt.ObjectText and part then
-        table.insert(trackedItems, {
-            name = prompt.ObjectText,
-            position = part.Position,
-            prompt = prompt
-        })
-    end
-end
-
-for _, item in pairs(ItemFolder:GetDescendants()) do
-    if item:IsA("Model") then pcall(function() trackItem(item) end) end
-end
-ItemFolder.DescendantAdded:Connect(function(item)
-    if item:IsA("Model") then task.wait(0.5) pcall(function() trackItem(item) end) end
-end)
-
--- Sell Setup
-local SellItems = {
-    ["Gold Coin"] = true, ["Rokakaka"] = true, ["Pure Rokakaka"] = true,
-    ["Mysterious Arrow"] = true, ["Diamond"] = true, ["Ancient Scroll"] = true,
-    ["Caesar's Headband"] = true, ["Stone Mask"] = true,
-    ["Rib Cage of The Saint's Corpse"] = true, ["Quinton's Glove"] = true,
-    ["Zeppeli's Hat"] = true, ["Clackers"] = true, ["Steel Ball"] = true,
-    ["Dio's Diary"] = true
-}
-Player.Backpack.ChildAdded:Connect(function(child)
-    if SellItems[child.Name] then
-        task.wait(0.1)
-        Character().Humanoid:EquipTool(child)
-        task.wait(0.1)
-        Character().RemoteEvent:FireServer("EndDialogue", {
-            NPC = "Merchant",
-            Dialogue = "Dialogue5",
-            Option = "Option2"
-        })
-        task.wait(0.3)
-    end
-end)
 
 -- Server Hop Logic
 spawn(function()
