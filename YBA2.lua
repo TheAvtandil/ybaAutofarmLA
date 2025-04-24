@@ -7,29 +7,24 @@ local TeleportService = game:GetService("TeleportService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local HttpService = game:GetService("HttpService")
-local CoreGui = game:GetService("CoreGui")
-
 local Player = Players.LocalPlayer
 local Character = function() return Player.Character or Player.CharacterAdded:Wait() end
 local HRP = function() return Character():WaitForChild("HumanoidRootPart") end
 local PlayerStats = Player:WaitForChild("PlayerStats")
 
--- Configuration
+-- Config
 local PLACE_ID = 2809202155
 local ReturnSpot = CFrame.new(978, -42, -49)
 local teleportOffset = Vector3.new(0, -6, 0)
 local serverHopTime = 105
-local AutoSell = true
-local BuyLucky = true
 local teleportStepTime = 0.07
 local teleportStepDistance = 25
 
--- GUI Setup
+-- GUI
 local function createGUI()
-    local gui = Instance.new("ScreenGui")
+    local gui = Instance.new("ScreenGui", Player:WaitForChild("PlayerGui"))
     gui.Name = "PigletHUB"
     gui.ResetOnSpawn = false
-    gui.Parent = Player:WaitForChild("PlayerGui")
 
     local frame = Instance.new("Frame", gui)
     frame.Name = "Main"
@@ -79,7 +74,6 @@ local function createGUI()
 end
 createGUI()
 
--- Update GUI
 local function updateGUI(status, itemName)
     local gui = Player.PlayerGui:FindFirstChild("PigletHUB")
     if gui then
@@ -91,7 +85,7 @@ local function updateGUI(status, itemName)
     end
 end
 
--- Smooth teleport that avoids anti-cheat
+-- Smooth teleport
 local function safeTeleportTo(pos)
     local start = HRP().Position
     local finish = pos + teleportOffset
@@ -107,19 +101,71 @@ local function safeTeleportTo(pos)
     return true
 end
 
--- Hold E key simulation
 local function holdEKey(duration)
     VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
     task.wait(duration)
     VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
 end
 
--- Noclip toggler
 local function toggleNoclip(state)
     for _, p in pairs(Character():GetDescendants()) do
         if p:IsA("BasePart") then p.CanCollide = not state end
     end
 end
+
+-- Item Tracking
+local trackedItems = {}
+local ItemFolder = Workspace:WaitForChild("Item_Spawns"):WaitForChild("Items")
+
+local function trackItem(itemModel)
+    if not itemModel:IsA("Model") then return end
+    local prompt = itemModel:FindFirstChildWhichIsA("ProximityPrompt", true)
+    local part = itemModel:FindFirstChild("Handle") or itemModel.PrimaryPart or itemModel:FindFirstChildWhichIsA("BasePart")
+    if prompt and prompt.ObjectText and part then
+        table.insert(trackedItems, {
+            name = prompt.ObjectText,
+            position = part.Position,
+            prompt = prompt
+        })
+    end
+end
+
+-- Initial scan
+for _, model in pairs(ItemFolder:GetDescendants()) do
+    if model:IsA("Model") then
+        pcall(function() trackItem(model) end)
+    end
+end
+
+-- Listen for new items
+ItemFolder.DescendantAdded:Connect(function(model)
+    if model:IsA("Model") then
+        task.wait(0.5)
+        pcall(function() trackItem(model) end)
+    end
+end)
+
+-- Auto Sell Items
+local SellItems = {
+    ["Gold Coin"] = true, ["Rokakaka"] = true, ["Pure Rokakaka"] = true,
+    ["Mysterious Arrow"] = true, ["Diamond"] = true, ["Ancient Scroll"] = true,
+    ["Caesar's Headband"] = true, ["Stone Mask"] = true,
+    ["Rib Cage of The Saint's Corpse"] = true, ["Quinton's Glove"] = true,
+    ["Zeppeli's Hat"] = true, ["Clackers"] = true, ["Steel Ball"] = true,
+    ["Dio's Diary"] = true
+}
+
+Player.Backpack.ChildAdded:Connect(function(child)
+    if SellItems[child.Name] then
+        task.wait(0.1)
+        Character().Humanoid:EquipTool(child)
+        task.wait(0.1)
+        Character().RemoteEvent:FireServer("EndDialogue", {
+            NPC = "Merchant", Dialogue = "Dialogue5", Option = "Option2"
+        })
+        task.wait(0.3)
+    end
+end)
 
 -- Farming Loop
 spawn(function()
@@ -148,17 +194,14 @@ spawn(function()
     end
 end)
 
--- Rejoin on kick
-local function autoRejoin()
-    game.Players.LocalPlayer.OnTeleport:Connect(function(state)
-        if state == Enum.TeleportState.Failed or state == Enum.TeleportState.Started then
-            TeleportService:Teleport(PLACE_ID, Player)
-        end
-    end)
-end
-autoRejoin()
+-- Auto Rejoin
+game.Players.LocalPlayer.OnTeleport:Connect(function(state)
+    if state == Enum.TeleportState.Failed or state == Enum.TeleportState.Started then
+        TeleportService:Teleport(PLACE_ID, Player)
+    end
+end)
 
--- Server Hop Logic
+-- Server Hop
 spawn(function()
     while true do
         task.wait(serverHopTime)
