@@ -104,7 +104,7 @@ end
 
 local function safeTeleportTo(pos)
     local success = pcall(function()
-        Character():SetPrimaryPartCFrame(CFrame.new(pos + teleportOffset))
+        HRP().CFrame = CFrame.new(pos + teleportOffset)
     end)
     task.wait(0.2)
     return success
