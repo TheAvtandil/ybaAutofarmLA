@@ -85,7 +85,7 @@ local function createGUI()
 	local frame = Instance.new("Frame", ui)
 	frame.Name = "Main"
 	frame.Position = UDim2.new(0, 10, 0, 10)
-	frame.Size = UDim2.new(0, 260, 0, 170)
+	frame.Size = UDim2.new(0, 260, 0, 180)
 	frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 	frame.BackgroundTransparency = 0.1
 	frame.Active = true
@@ -177,16 +177,16 @@ local function updateGUI(logText, statusText, debugText)
 		end
 	end
 end
-
---// Item Tracker (with MeshPart+Part+BasePart detection)
+--// Item Tracker (correct MeshPart/Part grabbing)
 local ItemFolder = Workspace:WaitForChild("Item_Spawns"):WaitForChild("Items")
+
 local function trackItem(itemModel)
 	if not itemModel:IsA("Model") then return end
 	local prompt = itemModel:FindFirstChildWhichIsA("ProximityPrompt", true)
 	local part = nil
 
-	for _, obj in pairs(itemModel:GetDescendants()) do
-		if obj:IsA("Part") or obj:IsA("MeshPart") or obj:IsA("BasePart") then
+	for _, obj in ipairs(itemModel:GetDescendants()) do
+		if obj:IsA("MeshPart") or obj:IsA("Part") or obj:IsA("BasePart") then
 			part = obj
 			break
 		end
@@ -200,9 +200,9 @@ local function trackItem(itemModel)
 			name = prompt.ObjectText,
 			position = part.Position
 		})
-		updateGUI("Tracking: " .. prompt.ObjectText, "Item Tracked", "Added to trackedItems")
+		updateGUI("Tracking: " .. prompt.ObjectText, "Item Tracked", "Tracking new item")
 	else
-		updateGUI(nil, nil, "Skipped: " .. itemModel.Name)
+		updateGUI(nil, nil, "Skipped bad item: " .. itemModel.Name)
 	end
 end
 
@@ -211,19 +211,20 @@ for _, item in ipairs(ItemFolder:GetChildren()) do
 	trackItem(item)
 end
 
--- Track new spawns
+-- Track newly spawned items
 ItemFolder.ChildAdded:Connect(function(child)
 	task.wait(0.2)
 	trackItem(child)
 end)
---// Hold E key simulation
+
+--// E Hold function
 local function holdE(duration)
 	VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
 	task.wait(duration)
 	VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
 end
 
---// Step teleport with anti-kick
+--// Step-by-step Teleport
 local function stepTeleport(targetCFrame)
 	local origin = HRP().CFrame.Position
 	local goal = targetCFrame.Position
@@ -232,14 +233,13 @@ local function stepTeleport(targetCFrame)
 	local steps = math.floor(distance / TeleportStepDistance)
 
 	for i = 1, steps do
-		local step = origin + (direction * TeleportStepDistance * i)
-		HRP().CFrame = CFrame.new(step)
+		local stepPos = origin + (direction * TeleportStepDistance * i)
+		HRP().CFrame = CFrame.new(stepPos)
 		task.wait(TeleportStepWait)
 	end
 
 	HRP().CFrame = targetCFrame
 end
-
 --// Pickup Logic
 local function pickupItem(item)
 	IsFarming = true
@@ -307,7 +307,7 @@ local function quickSell()
 	end
 end
 
---// Lucky Arrow auto-buy
+--// Lucky Arrow Auto-Buyer
 local function buyLucky()
 	if not BuyLucky then return end
 	local money = PlayerStats.Money.Value
@@ -319,7 +319,6 @@ local function buyLucky()
 		task.wait(0.3)
 	end
 end
-
 --// Serverhop (respects farming toggle)
 local function serverHop()
 	local success, result = pcall(function()
@@ -342,7 +341,7 @@ local function serverHop()
 	end
 end
 
--- Serverhop every 105 seconds
+--// Auto Serverhop every 105s
 task.spawn(function()
 	while true do
 		task.wait(ServerhopDelay)
@@ -353,7 +352,7 @@ task.spawn(function()
 	end
 end)
 
--- Panic key
+--// Panic key: Press P to instantly return to safe spot
 UserInputService.InputBegan:Connect(function(input)
 	if input.KeyCode == Enum.KeyCode.P then
 		updateGUI(nil, "Panic Key!", "Teleporting back")
@@ -361,7 +360,7 @@ UserInputService.InputBegan:Connect(function(input)
 	end
 end)
 
---// Main farming loop
+--// Main Farming Loop
 while true do
 	task.wait(0.5)
 
