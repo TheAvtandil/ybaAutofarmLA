@@ -1,4 +1,7 @@
--- Define essentials
+-- PigletHUB Ultimate Autofarm for Your Bizarre Adventure (YBA)
+-- Full script by ChatGPT + DearUser7 💥🐷
+
+--// Services
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -6,13 +9,15 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 local TeleportService = game:GetService("TeleportService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local HttpService = game:GetService("HttpService")
+local UserInputService = game:GetService("UserInputService")
 
+--// Vars
 local Player = Players.LocalPlayer
 local Character = function() return Player.Character or Player.CharacterAdded:Wait() end
 local HRP = function() return Character():WaitForChild("HumanoidRootPart") end
 local PlayerStats = Player:WaitForChild("PlayerStats")
 
--- Custom Config
+--// Config
 local PLACE_ID = 2809202155
 local ReturnSpot = CFrame.new(978, -42, -49)
 local TeleportOffset = Vector3.new(0, -6, 0)
@@ -25,29 +30,52 @@ local AutoSell = true
 local BuyLucky = true
 local trackedItems = {}
 local IsFarming = false
-local ItemCaps = { ... } -- ← your item caps here
-local SellItems = { ... } -- ← your sell filters here
 
 --// File save helpers
 local SettingsFile = "PigletHub_Settings.json"
 local FarmEnabled = true
 if isfile and readfile and writefile then
-	if isfile(SettingsFile) then
-		local success, data = pcall(function() return game:GetService("HttpService"):JSONDecode(readfile(SettingsFile)) end)
-		if success and type(data) == "table" then
-			FarmEnabled = data.Enabled or true
-		end
-	end
+    if isfile(SettingsFile) then
+        local success, data = pcall(function()
+            return HttpService:JSONDecode(readfile(SettingsFile))
+        end)
+        if success and type(data) == "table" then
+            FarmEnabled = data.Enabled or true
+        end
+    end
 end
-
 local function saveFarmToggle(state)
-	if writefile then
-		local json = game:GetService("HttpService"):JSONEncode({ Enabled = state })
-		writefile(SettingsFile, json)
-	end
+    if writefile then
+        local json = HttpService:JSONEncode({ Enabled = state })
+        writefile(SettingsFile, json)
+    end
 end
 
---// GUI Function with Toggle + Drag
+--// Item caps and sell list
+local ItemCaps = {
+    ["Gold Coin"] = 45, ["Rokakaka"] = 25, ["Pure Rokakaka"] = 10,
+    ["Mysterious Arrow"] = 25, ["Diamond"] = 30, ["Ancient Scroll"] = 10,
+    ["Caesar's Headband"] = 10, ["Stone Mask"] = 10,
+    ["Rib Cage of The Saint's Corpse"] = 20, ["Quinton's Glove"] = 10,
+    ["Zeppeli's Hat"] = 10, ["Lucky Arrow"] = 10,
+    ["Clackers"] = 10, ["Steel Ball"] = 10, ["Dio's Diary"] = 10
+}
+local SellItems = {
+    ["Gold Coin"] = true, ["Rokakaka"] = true, ["Pure Rokakaka"] = true,
+    ["Mysterious Arrow"] = true, ["Diamond"] = true, ["Ancient Scroll"] = true,
+    ["Caesar's Headband"] = true, ["Stone Mask"] = true,
+    ["Rib Cage of The Saint's Corpse"] = true, ["Quinton's Glove"] = true,
+    ["Zeppeli's Hat"] = true, ["Lucky Arrow"] = false,
+    ["Clackers"] = true, ["Steel Ball"] = true, ["Dio's Diary"] = true
+}
+
+-- Double item cap if gamepass
+pcall(function()
+    if MarketplaceService:UserOwnsGamePassAsync(Player.UserId, 14597778) then
+        for k, v in pairs(ItemCaps) do ItemCaps[k] = v * 2 end
+    end
+end)
+--// GUI Function (movable with toggle)
 local function createGUI()
 	local ui = Instance.new("ScreenGui")
 	ui.Name = "PigletHUB"
@@ -58,16 +86,16 @@ local function createGUI()
 	frame.Name = "Main"
 	frame.Position = UDim2.new(0, 10, 0, 10)
 	frame.Size = UDim2.new(0, 260, 0, 170)
-	frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
+	frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 	frame.BackgroundTransparency = 0.1
 	frame.Active = true
-	frame.Draggable = true -- 🖱️ Make GUI movable
+	frame.Draggable = true
 
 	local title = Instance.new("TextLabel", frame)
 	title.Text = "PigletHUB"
 	title.Size = UDim2.new(1, 0, 0, 20)
 	title.BackgroundTransparency = 1
-	title.TextColor3 = Color3.new(1,1,1)
+	title.TextColor3 = Color3.new(1, 1, 1)
 	title.Font = Enum.Font.SourceSansBold
 	title.TextSize = 20
 
@@ -76,7 +104,7 @@ local function createGUI()
 	log.Position = UDim2.new(0, 0, 0, 22)
 	log.Size = UDim2.new(1, 0, 0, 68)
 	log.BackgroundTransparency = 1
-	log.TextColor3 = Color3.fromRGB(255,255,255)
+	log.TextColor3 = Color3.fromRGB(255, 255, 255)
 	log.TextSize = 14
 	log.TextWrapped = true
 	log.TextYAlignment = Enum.TextYAlignment.Top
@@ -113,14 +141,13 @@ local function createGUI()
 	debug.Font = Enum.Font.SourceSans
 	debug.Text = "Debug: ..."
 
-	-- ✅ Toggle Button
 	local toggle = Instance.new("TextButton", frame)
 	toggle.Name = "ToggleFarm"
 	toggle.Text = "Farming: " .. (FarmEnabled and "ON" or "OFF")
 	toggle.Position = UDim2.new(0, 0, 1, -20)
 	toggle.Size = UDim2.new(1, 0, 0, 18)
 	toggle.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-	toggle.TextColor3 = Color3.new(1,1,1)
+	toggle.TextColor3 = Color3.new(1, 1, 1)
 	toggle.Font = Enum.Font.SourceSans
 	toggle.TextSize = 14
 
@@ -131,6 +158,26 @@ local function createGUI()
 	end)
 end
 createGUI()
+
+--// GUI Updater
+local function updateGUI(logText, statusText, debugText)
+	local gui = Player:FindFirstChild("PlayerGui"):FindFirstChild("PigletHUB")
+	if gui and gui:FindFirstChild("Main") then
+		if logText and gui.Main.ItemLog then
+			gui.Main.ItemLog.Text = "Item Log:\n" .. logText
+		end
+		if statusText and gui.Main.Status then
+			gui.Main.Status.Text = "Status: " .. statusText
+		end
+		if debugText and gui.Main.Debug then
+			gui.Main.Debug.Text = "Debug: " .. debugText
+		end
+		if gui.Main.Money then
+			gui.Main.Money.Text = "Money: $" .. tostring(math.floor(PlayerStats.Money.Value))
+		end
+	end
+end
+
 --// Item Tracker (with MeshPart+Part+BasePart detection)
 local ItemFolder = Workspace:WaitForChild("Item_Spawns"):WaitForChild("Items")
 local function trackItem(itemModel)
@@ -169,7 +216,6 @@ ItemFolder.ChildAdded:Connect(function(child)
 	task.wait(0.2)
 	trackItem(child)
 end)
-
 --// Hold E key simulation
 local function holdE(duration)
 	VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
@@ -308,7 +354,7 @@ task.spawn(function()
 end)
 
 -- Panic key
-game:GetService("UserInputService").InputBegan:Connect(function(input)
+UserInputService.InputBegan:Connect(function(input)
 	if input.KeyCode == Enum.KeyCode.P then
 		updateGUI(nil, "Panic Key!", "Teleporting back")
 		stepTeleport(ReturnSpot)
