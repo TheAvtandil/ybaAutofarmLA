@@ -1,3 +1,33 @@
+-- Define essentials
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local TeleportService = game:GetService("TeleportService")
+local MarketplaceService = game:GetService("MarketplaceService")
+local HttpService = game:GetService("HttpService")
+
+local Player = Players.LocalPlayer
+local Character = function() return Player.Character or Player.CharacterAdded:Wait() end
+local HRP = function() return Character():WaitForChild("HumanoidRootPart") end
+local PlayerStats = Player:WaitForChild("PlayerStats")
+
+-- Custom Config
+local PLACE_ID = 2809202155
+local ReturnSpot = CFrame.new(978, -42, -49)
+local TeleportOffset = Vector3.new(0, -6, 0)
+local TeleportStepDistance = 22
+local TeleportStepWait = 0.05
+local StayUnderItemTime = 0.6
+local PickupHoldTime = 0.25
+local ServerhopDelay = 105
+local AutoSell = true
+local BuyLucky = true
+local trackedItems = {}
+local IsFarming = false
+local ItemCaps = { ... } -- ← your item caps here
+local SellItems = { ... } -- ← your sell filters here
+
 --// File save helpers
 local SettingsFile = "PigletHub_Settings.json"
 local FarmEnabled = true
