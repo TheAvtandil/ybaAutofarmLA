@@ -245,10 +245,12 @@ local function pickupItem(item)
 	IsFarming = true
 	updateGUI("Last Item: " .. item.name, "Teleporting...", "To item")
 
-	-- Teleport under item
-	local goal = CFrame.new(item.position + TeleportOffset)
-	stepTeleport(goal)
-	task.wait(0.1)
+-- Teleport under item with debug
+local goal = CFrame.new(item.position + TeleportOffset)
+updateGUI(nil, nil, "Teleporting to: " .. tostring(goal.Position))
+stepTeleport(goal)
+task.wait(1) -- wait longer to test if it resets
+
 
 	updateGUI("Last Item: " .. item.name, "Picking Up...", "Holding E")
 	holdE(PickupHoldTime)
