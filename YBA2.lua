@@ -21,8 +21,6 @@ local PlayerStats = Player:WaitForChild("PlayerStats")
 local PLACE_ID = 2809202155
 local ReturnSpot = CFrame.new(978, -42, -49)
 local TeleportOffset = Vector3.new(0, -6, 0)
-local TeleportStepDistance = 22
-local TeleportStepWait = 0.05
 local StayUnderItemTime = 0.6
 local PickupHoldTime = 0.25
 local ServerhopDelay = 105
@@ -31,51 +29,55 @@ local BuyLucky = true
 local trackedItems = {}
 local IsFarming = false
 
---// File save helpers
+--// Save toggle state
 local SettingsFile = "PigletHub_Settings.json"
 local FarmEnabled = true
 if isfile and readfile and writefile then
-    if isfile(SettingsFile) then
-        local success, data = pcall(function()
-            return HttpService:JSONDecode(readfile(SettingsFile))
-        end)
-        if success and type(data) == "table" then
-            FarmEnabled = data.Enabled or true
-        end
-    end
-end
-local function saveFarmToggle(state)
-    if writefile then
-        local json = HttpService:JSONEncode({ Enabled = state })
-        writefile(SettingsFile, json)
-    end
+	if isfile(SettingsFile) then
+		local success, data = pcall(function()
+			return HttpService:JSONDecode(readfile(SettingsFile))
+		end)
+		if success and type(data) == "table" then
+			FarmEnabled = data.Enabled or true
+		end
+	end
 end
 
---// Item caps and sell list
+local function saveFarmToggle(state)
+	if writefile then
+		local json = HttpService:JSONEncode({ Enabled = state })
+		writefile(SettingsFile, json)
+	end
+end
+
+--// Item limits
 local ItemCaps = {
-    ["Gold Coin"] = 45, ["Rokakaka"] = 25, ["Pure Rokakaka"] = 10,
-    ["Mysterious Arrow"] = 25, ["Diamond"] = 30, ["Ancient Scroll"] = 10,
-    ["Caesar's Headband"] = 10, ["Stone Mask"] = 10,
-    ["Rib Cage of The Saint's Corpse"] = 20, ["Quinton's Glove"] = 10,
-    ["Zeppeli's Hat"] = 10, ["Lucky Arrow"] = 10,
-    ["Clackers"] = 10, ["Steel Ball"] = 10, ["Dio's Diary"] = 10
+	["Gold Coin"] = 45, ["Rokakaka"] = 25, ["Pure Rokakaka"] = 10,
+	["Mysterious Arrow"] = 25, ["Diamond"] = 30, ["Ancient Scroll"] = 10,
+	["Caesar's Headband"] = 10, ["Stone Mask"] = 10,
+	["Rib Cage of The Saint's Corpse"] = 20, ["Quinton's Glove"] = 10,
+	["Zeppeli's Hat"] = 10, ["Lucky Arrow"] = 10,
+	["Clackers"] = 10, ["Steel Ball"] = 10, ["Dio's Diary"] = 10
 }
 local SellItems = {
-    ["Gold Coin"] = true, ["Rokakaka"] = true, ["Pure Rokakaka"] = true,
-    ["Mysterious Arrow"] = true, ["Diamond"] = true, ["Ancient Scroll"] = true,
-    ["Caesar's Headband"] = true, ["Stone Mask"] = true,
-    ["Rib Cage of The Saint's Corpse"] = true, ["Quinton's Glove"] = true,
-    ["Zeppeli's Hat"] = true, ["Lucky Arrow"] = false,
-    ["Clackers"] = true, ["Steel Ball"] = true, ["Dio's Diary"] = true
+	["Gold Coin"] = true, ["Rokakaka"] = true, ["Pure Rokakaka"] = true,
+	["Mysterious Arrow"] = true, ["Diamond"] = true, ["Ancient Scroll"] = true,
+	["Caesar's Headband"] = true, ["Stone Mask"] = true,
+	["Rib Cage of The Saint's Corpse"] = true, ["Quinton's Glove"] = true,
+	["Zeppeli's Hat"] = true, ["Lucky Arrow"] = false,
+	["Clackers"] = true, ["Steel Ball"] = true, ["Dio's Diary"] = true
 }
 
--- Double item cap if gamepass
+-- Double item cap with gamepass
 pcall(function()
-    if MarketplaceService:UserOwnsGamePassAsync(Player.UserId, 14597778) then
-        for k, v in pairs(ItemCaps) do ItemCaps[k] = v * 2 end
-    end
+	if MarketplaceService:UserOwnsGamePassAsync(Player.UserId, 14597778) then
+		for k, v in pairs(ItemCaps) do
+			ItemCaps[k] = v * 2
+		end
+	end
 end)
---// GUI Function (movable with toggle)
+
+--// GUI Builder
 local function createGUI()
 	local ui = Instance.new("ScreenGui")
 	ui.Name = "PigletHUB"
@@ -158,7 +160,6 @@ local function createGUI()
 	end)
 end
 createGUI()
-
 --// GUI Updater
 local function updateGUI(logText, statusText, debugText)
 	local gui = Player:FindFirstChild("PlayerGui"):FindFirstChild("PigletHUB")
@@ -177,7 +178,20 @@ local function updateGUI(logText, statusText, debugText)
 		end
 	end
 end
---// Item Tracker (correct MeshPart/Part grabbing)
+
+--// Hold E key simulation
+local function holdE(duration)
+	VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+	task.wait(duration)
+	VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+end
+
+--// Instant teleport (safe and fast)
+local function instantTeleport(cf)
+	HRP().CFrame = cf
+end
+
+--// Item Tracker (find MeshPart/Part/BasePart inside item Model)
 local ItemFolder = Workspace:WaitForChild("Item_Spawns"):WaitForChild("Items")
 
 local function trackItem(itemModel)
@@ -200,76 +214,49 @@ local function trackItem(itemModel)
 			name = prompt.ObjectText,
 			position = part.Position
 		})
-		updateGUI("Tracking: " .. prompt.ObjectText, "Item Tracked", "Tracking new item")
+		updateGUI("Tracking: " .. prompt.ObjectText, "Item Tracked", "Found item model")
 	else
-		updateGUI(nil, nil, "Skipped bad item: " .. itemModel.Name)
+		updateGUI(nil, nil, "Skipped invalid model: " .. itemModel.Name)
 	end
 end
 
--- Track all existing items
+-- Track existing items
 for _, item in ipairs(ItemFolder:GetChildren()) do
 	trackItem(item)
 end
 
--- Track newly spawned items
+-- Track future items
 ItemFolder.ChildAdded:Connect(function(child)
 	task.wait(0.2)
 	trackItem(child)
 end)
 
---// E Hold function
-local function holdE(duration)
-	VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-	task.wait(duration)
-	VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
-end
-
---// Step-by-step Teleport
-local function stepTeleport(targetCFrame)
-	local origin = HRP().CFrame.Position
-	local goal = targetCFrame.Position
-	local direction = (goal - origin).Unit
-	local distance = (goal - origin).Magnitude
-	local steps = math.floor(distance / TeleportStepDistance)
-
-	for i = 1, steps do
-		local stepPos = origin + (direction * TeleportStepDistance * i)
-		HRP().CFrame = CFrame.new(stepPos)
-		task.wait(TeleportStepWait)
-	end
-
-	HRP().CFrame = targetCFrame
-end
---// Pickup Logic
+--// Pickup Function
 local function pickupItem(item)
 	IsFarming = true
-	updateGUI("Last Item: " .. item.name, "Teleporting...", "To item")
+	updateGUI("Last Item: " .. item.name, "Teleporting", "To item")
 
--- Teleport under item with debug
-local goal = CFrame.new(item.position + TeleportOffset)
-updateGUI(nil, nil, "Teleporting to: " .. tostring(goal.Position))
-stepTeleport(goal)
-task.wait(1) -- wait longer to test if it resets
+	-- Teleport under item instantly
+	local target = CFrame.new(item.position + TeleportOffset)
+	instantTeleport(target)
 
+	task.wait(0.1)
+	updateGUI("Last Item: " .. item.name, "Holding E...", "Trying pickup")
 
-	updateGUI("Last Item: " .. item.name, "Picking Up...", "Holding E")
+	-- Hold E key + fire prompt
 	holdE(PickupHoldTime)
-
-	pcall(function()
-		fireproximityprompt(item.prompt)
-	end)
+	pcall(function() fireproximityprompt(item.prompt) end)
 
 	task.wait(StayUnderItemTime)
 
-	-- Return to safe spot
-	updateGUI(nil, "Returning...", "To safe spot")
-	stepTeleport(ReturnSpot)
+	-- Return to safe location
+	updateGUI(nil, "Returning", "Safe zone")
+	instantTeleport(ReturnSpot)
 	task.wait(0.2)
 
 	IsFarming = false
 end
-
---// Sell logic
+--// Equip tool and sell
 local function equipAndSell(tool)
 	if not tool then return false end
 	local char = Character()
@@ -292,6 +279,7 @@ local function equipAndSell(tool)
 	return false
 end
 
+--// Quick Sell Loop
 local function quickSell()
 	if not AutoSell then return end
 	local sold = 0
@@ -309,7 +297,7 @@ local function quickSell()
 	end
 end
 
---// Lucky Arrow Auto-Buyer
+--// Auto Buy Lucky Arrow
 local function buyLucky()
 	if not BuyLucky then return end
 	local money = PlayerStats.Money.Value
@@ -321,9 +309,18 @@ local function buyLucky()
 		task.wait(0.3)
 	end
 end
---// Serverhop (respects farming toggle)
+
+--// Panic Key (Press P to teleport to safe return spot)
+UserInputService.InputBegan:Connect(function(input)
+	if input.KeyCode == Enum.KeyCode.P then
+		updateGUI(nil, "Panic Key!", "Teleporting to safe spot")
+		instantTeleport(ReturnSpot)
+	end
+end)
+
+--// Serverhop every 105s (if farming is allowed and not busy)
 local function serverHop()
-	local success, result = pcall(function()
+	local success = pcall(function()
 		local servers = {}
 		local response = HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. PLACE_ID .. "/servers/Public?sortOrder=Asc&limit=100"))
 		for _, s in pairs(response.data) do
@@ -343,7 +340,7 @@ local function serverHop()
 	end
 end
 
---// Auto Serverhop every 105s
+-- Start serverhop loop
 task.spawn(function()
 	while true do
 		task.wait(ServerhopDelay)
@@ -353,16 +350,7 @@ task.spawn(function()
 		end
 	end
 end)
-
---// Panic key: Press P to instantly return to safe spot
-UserInputService.InputBegan:Connect(function(input)
-	if input.KeyCode == Enum.KeyCode.P then
-		updateGUI(nil, "Panic Key!", "Teleporting back")
-		stepTeleport(ReturnSpot)
-	end
-end)
-
---// Main Farming Loop
+--// Main farming loop
 while true do
 	task.wait(0.5)
 
@@ -372,9 +360,12 @@ while true do
 	end
 
 	local validItem
+
+	-- Reverse iterate tracked items to find a valid one
 	for i = #trackedItems, 1, -1 do
 		local item = trackedItems[i]
 		if item.model and item.prompt and item.prompt.Parent and item.part and not item.model:IsDescendantOf(nil) then
+			-- Check item cap
 			local inBackpack = 0
 			for _, tool in ipairs(Player.Backpack:GetChildren()) do
 				if tool.Name == item.name then
