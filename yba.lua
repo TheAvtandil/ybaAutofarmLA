@@ -1,11 +1,11 @@
--- Safer Item Spawn Logger (No Crash Version)
+-- Final Safe Logger (Only track valid items, no junk)
 
 local Workspace = game:GetService("Workspace")
 local HttpService = game:GetService("HttpService")
 
 local ItemFolder = Workspace:WaitForChild("Item_Spawns"):WaitForChild("Items")
 local loggedItems = {}
-local fileName = "YBA_ItemSpawns.json"
+local fileName = "YBA_RealItems.json"
 
 local function save()
     if writefile then
@@ -13,27 +13,31 @@ local function save()
     end
 end
 
-local function logNewItem(item)
+local function trackIfValid(item)
     task.spawn(function()
-        task.wait(0.5) -- wait half second for item to fully load
+        task.wait(0.3) -- slight wait
 
         if not item:IsA("Model") then return end
-        local part = item:FindFirstChildWhichIsA("BasePart", true)
-        if not part then return end
-        if loggedItems[item.Name] then return end -- already logged?
+        local prompt = item:FindFirstChildWhichIsA("ProximityPrompt", true)
+        local basepart = item:FindFirstChildWhichIsA("BasePart", true)
 
-        loggedItems[item.Name] = {
-            X = math.floor(part.Position.X),
-            Y = math.floor(part.Position.Y),
-            Z = math.floor(part.Position.Z),
-        }
-
-        print("[LOGGED]", item.Name, part.Position)
-        save()
+        if prompt and basepart then
+            local pos = basepart.Position
+            loggedItems[item.Name .. tostring(pos)] = {
+                Name = item.Name,
+                X = math.floor(pos.X),
+                Y = math.floor(pos.Y),
+                Z = math.floor(pos.Z)
+            }
+            print("✅ Logged Item:", item.Name, pos)
+            save()
+        else
+            -- ignore junk
+        end
     end)
 end
 
--- Only future spawns
-ItemFolder.ChildAdded:Connect(logNewItem)
+-- Listen for new clean spawns
+ItemFolder.ChildAdded:Connect(trackIfValid)
 
-print("✅ YBA Light Logger running. Waiting for item spawns...")
+print("✅ PigletHub Logger Started. Waiting for real items only...")
