@@ -345,3 +345,29 @@ UserInputService.InputBegan:Connect(function(input)
         instantTeleport(SafeSpot)
     end
 end)
+--// Add Toggle Button to GUI
+local function createToggleButton()
+    local gui = Players.LocalPlayer:FindFirstChild("PlayerGui"):FindFirstChild("PigletHUB")
+    if not gui then return end
+
+    local frame = gui:FindFirstChild("Main")
+    if not frame then return end
+
+    local toggle = Instance.new("TextButton")
+    toggle.Name = "FarmToggle"
+    toggle.Parent = frame
+    toggle.Position = UDim2.new(0, 0, 1, -25)
+    toggle.Size = UDim2.new(1, 0, 0, 20)
+    toggle.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    toggle.TextColor3 = Color3.new(1, 1, 1)
+    toggle.Font = Enum.Font.SourceSans
+    toggle.TextSize = 14
+    toggle.Text = "Farming: " .. (FarmingEnabled and "ON" or "OFF")
+
+    toggle.MouseButton1Click:Connect(function()
+        FarmingEnabled = not FarmingEnabled
+        toggle.Text = "Farming: " .. (FarmingEnabled and "ON" or "OFF")
+        updateGUI(FarmingEnabled and "Farming Enabled" or "Farming Paused", "Toggle switched!")
+    end)
+end
+createToggleButton()
