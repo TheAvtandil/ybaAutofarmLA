@@ -71,6 +71,7 @@ local function createGUI()
     frame.Active = true
     frame.Draggable = true
 
+    -- Title
     local title = Instance.new("TextLabel", frame)
     title.Size = UDim2.new(1, 0, 0, 20)
     title.Text = "PigletHUB Autofarm V2"
@@ -79,6 +80,7 @@ local function createGUI()
     title.Font = Enum.Font.SourceSansBold
     title.TextSize = 18
 
+    -- Status
     local status = Instance.new("TextLabel", frame)
     status.Name = "Status"
     status.Position = UDim2.new(0, 0, 0, 25)
@@ -89,6 +91,7 @@ local function createGUI()
     status.TextSize = 14
     status.Text = "Status: Idle"
 
+    -- Debug
     local debug = Instance.new("TextLabel", frame)
     debug.Name = "Debug"
     debug.Position = UDim2.new(0, 0, 0, 45)
@@ -100,6 +103,7 @@ local function createGUI()
     debug.TextWrapped = true
     debug.Text = "Debug:\n..."
 
+    -- Item Log
     local itemLog = Instance.new("TextLabel", frame)
     itemLog.Name = "ItemLog"
     itemLog.Position = UDim2.new(0, 0, 0, 90)
@@ -110,6 +114,7 @@ local function createGUI()
     itemLog.TextSize = 14
     itemLog.Text = "Item: None"
 
+    -- Money
     local money = Instance.new("TextLabel", frame)
     money.Name = "Money"
     money.Position = UDim2.new(0, 0, 0, 115)
@@ -119,8 +124,27 @@ local function createGUI()
     money.Font = Enum.Font.SourceSans
     money.TextSize = 14
     money.Text = "Money: $0"
+
+    -- NOW ADD Toggle button
+    local toggle = Instance.new("TextButton", frame)
+    toggle.Name = "FarmToggle"
+    toggle.Position = UDim2.new(0, 0, 1, -20) -- Bottom of frame
+    toggle.Size = UDim2.new(1, 0, 0, 18)
+    toggle.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    toggle.BorderSizePixel = 0
+    toggle.TextColor3 = Color3.new(1, 1, 1)
+    toggle.Font = Enum.Font.SourceSansBold
+    toggle.TextSize = 14
+    toggle.Text = "Farming: " .. (FarmingEnabled and "ON" or "OFF")
+
+    toggle.MouseButton1Click:Connect(function()
+        FarmingEnabled = not FarmingEnabled
+        toggle.Text = "Farming: " .. (FarmingEnabled and "ON" or "OFF")
+        updateGUI(FarmingEnabled and "Farming Enabled" or "Farming Paused", "Toggled by user.")
+    end)
 end
 createGUI()
+
 --// GUI Update Function
 local function updateGUI(statusText, debugText, itemName)
     local gui = Players.LocalPlayer:FindFirstChild("PlayerGui"):FindFirstChild("PigletHUB")
