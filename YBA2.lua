@@ -1,4 +1,4 @@
--- PigletHUB V2 - Ultimate YBA Autofarm (Better Service Setup)
+-- PigletHUB V2 - Ultimate YBA Autofarm (Final Clean Rebuild)
 -- Built by ChatGPT + DearUser7 🐷🔥
 
 --// Services
@@ -18,6 +18,32 @@ local TweenService = game:GetService("TweenService")
 local Lighting = game:GetService("Lighting")
 local CollectionService = game:GetService("CollectionService")
 local Debris = game:GetService("Debris")
+
+--// Bypass Teleport Anti-Cheat
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+    local args = {...}
+    local method = getnamecallmethod()
+
+    if not checkcaller() and method == "InvokeServer" and args[1] == "idklolbrah2de" then
+        return "  ___XP DE KEY" -- Teleport Bypass
+    end
+
+    return oldNamecall(self, ...)
+end))
+
+--// Bypass Item Magnitude Anti-Cheat
+local oldIndex
+oldIndex = hookmetamethod(game, "__index", newcclosure(function(self, key)
+    if not checkcaller() and typeof(self) == "Vector3" and tostring(key):lower() == "magnitude" then
+        local callingScript = getcallingscript()
+        if callingScript and callingScript.Name == "ItemSpawn" then
+            return 0 -- Always pretend close to items
+        end
+    end
+
+    return oldIndex(self, key)
+end))
 
 --// Variables
 local Player = Players.LocalPlayer
@@ -57,17 +83,17 @@ local ItemSellList = {
     ["Dio's Diary"] = true,
     ["Lucky Arrow"] = false -- Do not sell Lucky Arrow
 }
-local ItemCaps = ItemSellList -- reuse for item caps
---// Create Corrected GUI
+local ItemCaps = ItemSellList -- reuse for caps
+--// Create PigletHUB GUI
 local function createGUI()
     local gui = Instance.new("ScreenGui", Players.LocalPlayer:WaitForChild("PlayerGui"))
     gui.Name = "PigletHUB"
 
     local frame = Instance.new("Frame", gui)
     frame.Name = "Main"
-    frame.Size = UDim2.new(0, 270, 0, 180)
+    frame.Size = UDim2.new(0, 270, 0, 200)
     frame.Position = UDim2.new(0, 10, 0, 10)
-    frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
+    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     frame.Active = true
     frame.Draggable = true
 
@@ -75,7 +101,7 @@ local function createGUI()
     local title = Instance.new("TextLabel", frame)
     title.Size = UDim2.new(1, 0, 0, 20)
     title.Text = "PigletHUB Autofarm V2"
-    title.TextColor3 = Color3.fromRGB(255,255,255)
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.BackgroundTransparency = 1
     title.Font = Enum.Font.SourceSansBold
     title.TextSize = 18
@@ -85,7 +111,7 @@ local function createGUI()
     status.Name = "Status"
     status.Position = UDim2.new(0, 0, 0, 25)
     status.Size = UDim2.new(1, 0, 0, 20)
-    status.TextColor3 = Color3.fromRGB(0,255,0)
+    status.TextColor3 = Color3.fromRGB(0, 255, 0)
     status.BackgroundTransparency = 1
     status.Font = Enum.Font.SourceSans
     status.TextSize = 14
@@ -96,7 +122,7 @@ local function createGUI()
     debug.Name = "Debug"
     debug.Position = UDim2.new(0, 0, 0, 45)
     debug.Size = UDim2.new(1, 0, 0, 40)
-    debug.TextColor3 = Color3.fromRGB(200,200,200)
+    debug.TextColor3 = Color3.fromRGB(200, 200, 200)
     debug.BackgroundTransparency = 1
     debug.Font = Enum.Font.SourceSans
     debug.TextSize = 14
@@ -108,7 +134,7 @@ local function createGUI()
     itemLog.Name = "ItemLog"
     itemLog.Position = UDim2.new(0, 0, 0, 90)
     itemLog.Size = UDim2.new(1, 0, 0, 20)
-    itemLog.TextColor3 = Color3.fromRGB(0,200,255)
+    itemLog.TextColor3 = Color3.fromRGB(0, 200, 255)
     itemLog.BackgroundTransparency = 1
     itemLog.Font = Enum.Font.SourceSans
     itemLog.TextSize = 14
@@ -119,17 +145,17 @@ local function createGUI()
     money.Name = "Money"
     money.Position = UDim2.new(0, 0, 0, 115)
     money.Size = UDim2.new(1, 0, 0, 20)
-    money.TextColor3 = Color3.fromRGB(255,255,0)
+    money.TextColor3 = Color3.fromRGB(255, 255, 0)
     money.BackgroundTransparency = 1
     money.Font = Enum.Font.SourceSans
     money.TextSize = 14
     money.Text = "Money: $0"
 
-    -- NOW ADD Toggle button
+    -- Toggle Button
     local toggle = Instance.new("TextButton", frame)
     toggle.Name = "FarmToggle"
-    toggle.Position = UDim2.new(0, 0, 1, -20) -- Bottom of frame
-    toggle.Size = UDim2.new(1, 0, 0, 18)
+    toggle.Position = UDim2.new(0, 0, 1, -22) -- bottom of frame
+    toggle.Size = UDim2.new(1, 0, 0, 20)
     toggle.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
     toggle.BorderSizePixel = 0
     toggle.TextColor3 = Color3.new(1, 1, 1)
@@ -140,11 +166,10 @@ local function createGUI()
     toggle.MouseButton1Click:Connect(function()
         FarmingEnabled = not FarmingEnabled
         toggle.Text = "Farming: " .. (FarmingEnabled and "ON" or "OFF")
-        updateGUI(FarmingEnabled and "Farming Enabled" or "Farming Paused", "Toggled by user.")
+        updateGUI(FarmingEnabled and "Farming Enabled" or "Farming Paused", "Toggled by User")
     end)
 end
 createGUI()
-
 --// GUI Update Function
 local function updateGUI(statusText, debugText, itemName)
     local gui = Players.LocalPlayer:FindFirstChild("PlayerGui"):FindFirstChild("PigletHUB")
@@ -163,12 +188,34 @@ local function updateGUI(statusText, debugText, itemName)
         end
     end
 end
---// Instant Teleport
+
+--// Instant Teleport (used for quick snap)
 local function instantTeleport(cframe)
-    HRP().CFrame = cframe
+    local hrp = HRP()
+    if hrp then
+        hrp.CFrame = cframe
+    end
 end
 
---// Track All Items (improved)
+--// Step Teleport (better, safer, won't "snap back")
+local function stepTeleport(targetCFrame)
+    local hrp = HRP()
+    if not hrp then return end
+
+    local distance = (hrp.Position - targetCFrame.Position).Magnitude
+    local steps = math.max(5, math.floor(distance / 5)) -- More distance = more steps
+    local direction = (targetCFrame.Position - hrp.Position).Unit
+    local stepSize = distance / steps
+
+    for i = 1, steps do
+        hrp.CFrame = hrp.CFrame + direction * stepSize
+        task.wait(0.02) -- very fast but enough to not trigger kick
+    end
+
+    hrp.CFrame = targetCFrame
+end
+
+--// Setup for Item Tracking
 local ItemFolder = Workspace:WaitForChild("Item_Spawns"):WaitForChild("Items")
 
 local function trackItem(itemModel)
@@ -176,9 +223,8 @@ local function trackItem(itemModel)
     local prompt = itemModel:FindFirstChildWhichIsA("ProximityPrompt", true)
     local part = nil
 
-    -- Find usable part (MeshPart, Part, or any BasePart)
     for _, desc in ipairs(itemModel:GetDescendants()) do
-        if desc:IsA("MeshPart") or desc:IsA("Part") or desc:IsA("BasePart") then
+        if desc:IsA("MeshPart") or desc:IsA("BasePart") then
             part = desc
             break
         end
@@ -194,23 +240,23 @@ local function trackItem(itemModel)
         })
         updateGUI("Tracking", "Tracking item...", prompt.ObjectText)
     else
-        updateGUI(nil, "Bad item skipped", itemModel.Name)
+        updateGUI(nil, "Skipped bad item", itemModel.Name)
     end
 end
 
---// Initial Tracking
+--// Initial Tracking for Already Existing Items
 for _, item in ipairs(ItemFolder:GetChildren()) do
     task.spawn(function()
         trackItem(item)
     end)
 end
 
---// Track newly spawned items
+--// Track New Items
 ItemFolder.ChildAdded:Connect(function(child)
     task.wait(0.1)
     trackItem(child)
 end)
---// Hold E Key
+--// Hold E Key (to pick up)
 local function holdE(duration)
     VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
     task.wait(duration)
@@ -220,28 +266,28 @@ end
 --// Pickup Item Logic
 local function pickupItem(item)
     IsFarming = true
-    updateGUI("Farming", "Teleporting to: " .. item.name)
+    updateGUI("Farming", "Teleporting to: " .. item.name, item.name)
 
-    -- Teleport under item
+    -- Teleport under item using stepTeleport
     local targetPos = item.position + TeleportOffset
-    instantTeleport(CFrame.new(targetPos))
-    task.wait(0.1)
+    stepTeleport(CFrame.new(targetPos))
+    task.wait(0.05)
 
     -- Hold E to pick up
     updateGUI("Farming", "Holding E: " .. item.name)
     holdE(0.25)
 
-    -- Backup ProximityPrompt
+    -- Backup - Force fire proximity prompt just in case
     pcall(function()
         fireproximityprompt(item.prompt)
     end)
 
-    -- Stay under item
+    -- Stay under item briefly
     task.wait(StayTimeUnderItem)
 
-    -- Return to SafeSpot
-    updateGUI("Returning", "Safe Spot")
-    instantTeleport(SafeSpot)
+    -- Teleport back to SafeSpot
+    updateGUI("Returning", "Going back SafeSpot")
+    stepTeleport(SafeSpot)
     task.wait(0.2)
 
     IsFarming = false
@@ -351,22 +397,61 @@ local function serverHop()
     end
 end
 
---// Auto ServerHop every 105s
+--// Auto ServerHop every 105 seconds
 task.spawn(function()
     while true do
         task.wait(ServerHopDelay)
         if not IsFarming and FarmingEnabled then
-            updateGUI("Serverhopping", "Time to hop")
+            updateGUI("Serverhopping", "Changing servers")
             serverHop()
         end
     end
 end)
 
---// Panic Key (P) Instant Teleport to Safe Spot
+--// Panic Key (P) Instant Safe Teleport
 UserInputService.InputBegan:Connect(function(input)
     if input.KeyCode == Enum.KeyCode.P then
-        updateGUI("Panic Key!", "Teleporting to Safe Spot...")
-        instantTeleport(SafeSpot)
+        updateGUI("Panic!", "Teleporting to Safe Spot")
+        stepTeleport(SafeSpot)
+    end
+end)
+--// Minor Anti-Lag: Disable Shadows, Lower Lighting Effects
+task.spawn(function()
+    task.wait(5)
+    pcall(function()
+        Lighting.GlobalShadows = false
+        Lighting.FogEnd = 100000
+        Lighting.Brightness = 2
+    end)
+end)
+
+--// Minor Performance Tweak: Disable Player's Particle Effects
+task.spawn(function()
+    while true do
+        task.wait(10)
+        for _, v in ipairs(Character():GetDescendants()) do
+            if v:IsA("ParticleEmitter") or v:IsA("Trail") then
+                v.Enabled = false
+            end
+        end
     end
 end)
 
+--// Safety: Auto Rejoin if Disconnected
+Player.OnTeleport:Connect(function(state)
+    if state == Enum.TeleportState.Failed then
+        TeleportService:Teleport(PLACE_ID)
+    end
+end)
+
+--// Fix HRP getter (sometimes HRP loads late after teleport!)
+local function HRP()
+    local char = Character()
+    return char:WaitForChild("HumanoidRootPart", 5) or char:FindFirstChild("HumanoidRootPart")
+end
+
+--// Fix Character() after respawn or death
+Player.CharacterAdded:Connect(function(newChar)
+    task.wait(1)
+    updateGUI("Respawned", "Waiting for items...")
+end)
