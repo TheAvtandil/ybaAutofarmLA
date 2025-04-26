@@ -1,14 +1,23 @@
--- PigletHUB V1 - Ultimate YBA Autofarm (Final Fixed Version)
+-- PigletHUB V2 - Ultimate YBA Autofarm (Better Service Setup)
 -- Built by ChatGPT + DearUser7 🐷🔥
 
 --// Services
 local Players = game:GetService("Players")
-local Workspace = game:GetService("Workspace")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
+local StarterGui = game:GetService("StarterGui")
+local CoreGui = game:GetService("CoreGui")
+local VirtualUser = game:GetService("VirtualUser")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local TeleportService = game:GetService("TeleportService")
-local HttpService = game:GetService("HttpService")
-local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local MarketplaceService = game:GetService("MarketplaceService")
+local PhysicsService = game:GetService("PhysicsService")
+local TweenService = game:GetService("TweenService")
+local Lighting = game:GetService("Lighting")
+local CollectionService = game:GetService("CollectionService")
+local Debris = game:GetService("Debris")
 
 --// Variables
 local Player = Players.LocalPlayer
@@ -48,16 +57,15 @@ local ItemSellList = {
     ["Dio's Diary"] = true,
     ["Lucky Arrow"] = false -- Do not sell Lucky Arrow
 }
-local ItemCaps = ItemSellList -- use same table for cap check
-
---// Create GUI
+local ItemCaps = ItemSellList -- reuse for item caps
+--// Create Corrected GUI
 local function createGUI()
-    local gui = Instance.new("ScreenGui", Player:WaitForChild("PlayerGui"))
+    local gui = Instance.new("ScreenGui", Players.LocalPlayer:WaitForChild("PlayerGui"))
     gui.Name = "PigletHUB"
 
     local frame = Instance.new("Frame", gui)
     frame.Name = "Main"
-    frame.Size = UDim2.new(0, 250, 0, 140)
+    frame.Size = UDim2.new(0, 270, 0, 180)
     frame.Position = UDim2.new(0, 10, 0, 10)
     frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
     frame.Active = true
@@ -65,7 +73,7 @@ local function createGUI()
 
     local title = Instance.new("TextLabel", frame)
     title.Size = UDim2.new(1, 0, 0, 20)
-    title.Text = "PigletHUB Autofarm"
+    title.Text = "PigletHUB Autofarm V2"
     title.TextColor3 = Color3.fromRGB(255,255,255)
     title.BackgroundTransparency = 1
     title.Font = Enum.Font.SourceSansBold
@@ -73,7 +81,7 @@ local function createGUI()
 
     local status = Instance.new("TextLabel", frame)
     status.Name = "Status"
-    status.Position = UDim2.new(0, 0, 0, 30)
+    status.Position = UDim2.new(0, 0, 0, 25)
     status.Size = UDim2.new(1, 0, 0, 20)
     status.TextColor3 = Color3.fromRGB(0,255,0)
     status.BackgroundTransparency = 1
@@ -83,23 +91,52 @@ local function createGUI()
 
     local debug = Instance.new("TextLabel", frame)
     debug.Name = "Debug"
-    debug.Position = UDim2.new(0, 0, 0, 50)
-    debug.Size = UDim2.new(1, 0, 0, 80)
+    debug.Position = UDim2.new(0, 0, 0, 45)
+    debug.Size = UDim2.new(1, 0, 0, 40)
     debug.TextColor3 = Color3.fromRGB(200,200,200)
     debug.BackgroundTransparency = 1
     debug.Font = Enum.Font.SourceSans
     debug.TextSize = 14
     debug.TextWrapped = true
     debug.Text = "Debug:\n..."
+
+    local itemLog = Instance.new("TextLabel", frame)
+    itemLog.Name = "ItemLog"
+    itemLog.Position = UDim2.new(0, 0, 0, 90)
+    itemLog.Size = UDim2.new(1, 0, 0, 20)
+    itemLog.TextColor3 = Color3.fromRGB(0,200,255)
+    itemLog.BackgroundTransparency = 1
+    itemLog.Font = Enum.Font.SourceSans
+    itemLog.TextSize = 14
+    itemLog.Text = "Item: None"
+
+    local money = Instance.new("TextLabel", frame)
+    money.Name = "Money"
+    money.Position = UDim2.new(0, 0, 0, 115)
+    money.Size = UDim2.new(1, 0, 0, 20)
+    money.TextColor3 = Color3.fromRGB(255,255,0)
+    money.BackgroundTransparency = 1
+    money.Font = Enum.Font.SourceSans
+    money.TextSize = 14
+    money.Text = "Money: $0"
 end
 createGUI()
-
---// Update GUI function
-local function updateGUI(statusText, debugText)
-    local gui = Player:FindFirstChild("PlayerGui"):FindFirstChild("PigletHUB")
-    if gui then
-        if statusText then gui.Main.Status.Text = "Status: " .. statusText end
-        if debugText then gui.Main.Debug.Text = "Debug:\n" .. debugText end
+--// GUI Update Function
+local function updateGUI(statusText, debugText, itemName)
+    local gui = Players.LocalPlayer:FindFirstChild("PlayerGui"):FindFirstChild("PigletHUB")
+    if gui and gui:FindFirstChild("Main") then
+        if statusText then
+            gui.Main.Status.Text = "Status: " .. statusText
+        end
+        if debugText then
+            gui.Main.Debug.Text = "Debug:\n" .. debugText
+        end
+        if itemName then
+            gui.Main.ItemLog.Text = "Item: " .. itemName
+        end
+        if gui.Main.Money then
+            gui.Main.Money.Text = "Money: $" .. tostring(math.floor(PlayerStats.Money.Value))
+        end
     end
 end
 --// Instant Teleport
@@ -107,7 +144,7 @@ local function instantTeleport(cframe)
     HRP().CFrame = cframe
 end
 
---// Track All Items
+--// Track All Items (improved)
 local ItemFolder = Workspace:WaitForChild("Item_Spawns"):WaitForChild("Items")
 
 local function trackItem(itemModel)
@@ -115,9 +152,9 @@ local function trackItem(itemModel)
     local prompt = itemModel:FindFirstChildWhichIsA("ProximityPrompt", true)
     local part = nil
 
-    -- Find usable part
+    -- Find usable part (MeshPart, Part, or any BasePart)
     for _, desc in ipairs(itemModel:GetDescendants()) do
-        if desc:IsA("BasePart") or desc:IsA("MeshPart") then
+        if desc:IsA("MeshPart") or desc:IsA("Part") or desc:IsA("BasePart") then
             part = desc
             break
         end
@@ -131,43 +168,46 @@ local function trackItem(itemModel)
             name = prompt.ObjectText,
             position = part.Position
         })
-        updateGUI("Tracking", "Tracking item: " .. prompt.ObjectText)
+        updateGUI("Tracking", "Tracking item...", prompt.ObjectText)
+    else
+        updateGUI(nil, "Bad item skipped", itemModel.Name)
     end
 end
 
--- Initial Track
+--// Initial Tracking
 for _, item in ipairs(ItemFolder:GetChildren()) do
-    trackItem(item)
+    task.spawn(function()
+        trackItem(item)
+    end)
 end
 
--- Track newly spawned items
+--// Track newly spawned items
 ItemFolder.ChildAdded:Connect(function(child)
     task.wait(0.1)
     trackItem(child)
 end)
-
---// Hold E function
+--// Hold E Key
 local function holdE(duration)
     VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
     task.wait(duration)
     VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
 end
 
---// Pick Up Item
+--// Pickup Item Logic
 local function pickupItem(item)
     IsFarming = true
     updateGUI("Farming", "Teleporting to: " .. item.name)
 
     -- Teleport under item
-    local targetPosition = item.position + TeleportOffset
-    instantTeleport(CFrame.new(targetPosition))
+    local targetPos = item.position + TeleportOffset
+    instantTeleport(CFrame.new(targetPos))
     task.wait(0.1)
 
-    -- Hold E to pick
-    updateGUI("Farming", "Holding E to pick " .. item.name)
+    -- Hold E to pick up
+    updateGUI("Farming", "Holding E: " .. item.name)
     holdE(0.25)
 
-    -- Fire backup
+    -- Backup ProximityPrompt
     pcall(function()
         fireproximityprompt(item.prompt)
     end)
@@ -175,13 +215,45 @@ local function pickupItem(item)
     -- Stay under item
     task.wait(StayTimeUnderItem)
 
-    -- Teleport back
-    updateGUI("Returning", "Returning to Safe Spot")
+    -- Return to SafeSpot
+    updateGUI("Returning", "Safe Spot")
     instantTeleport(SafeSpot)
     task.wait(0.2)
 
     IsFarming = false
 end
+
+--// Main Farming Loop
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+
+        if not FarmingEnabled then
+            updateGUI("Paused", "Waiting for toggle...")
+            continue
+        end
+
+        local validItem
+        for i = #TrackedItems, 1, -1 do
+            local item = TrackedItems[i]
+            if item.model and item.prompt and item.prompt.Parent and item.part and not item.model:IsDescendantOf(nil) then
+                validItem = item
+                table.remove(TrackedItems, i)
+                break
+            else
+                table.remove(TrackedItems, i)
+            end
+        end
+
+        if validItem then
+            pickupItem(validItem)
+        else
+            quickSell()
+            buyLucky()
+            updateGUI("Idle", "Waiting for items...")
+        end
+    end
+end)
 --// Quick Sell Logic
 local function equipAndSell(tool)
     if not tool then return false end
@@ -214,7 +286,7 @@ local function quickSell()
                 if tool.Name == itemName then
                     if equipAndSell(tool) then
                         sold += 1
-                        updateGUI("Sold", "Sold " .. tool.Name .. " | Total Sold: " .. sold)
+                        updateGUI("Sold", "Sold: " .. tool.Name .. " | Total: " .. sold)
                     end
                 end
             end
@@ -228,19 +300,12 @@ local function buyLucky()
     local money = PlayerStats.Money.Value
     if money >= 50000 then
         Character().RemoteEvent:FireServer("PurchaseShopItem", { ItemName = "1x Lucky Arrow" })
-        updateGUI("Buying Lucky Arrow", "Money: " .. money)
+        updateGUI("Buying Lucky Arrow", "Money: $" .. money)
         task.wait(0.3)
     end
 end
 
---// Panic Key (Press P)
-UserInputService.InputBegan:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.P then
-        updateGUI("Panic Key!", "Teleporting to Safe Spot...")
-        instantTeleport(SafeSpot)
-    end
-end)
---// Serverhop Logic
+--// ServerHop Logic
 local function serverHop()
     local success, result = pcall(function()
         local servers = {}
@@ -262,7 +327,7 @@ local function serverHop()
     end
 end
 
---// Auto Serverhop every 105s
+--// Auto ServerHop every 105s
 task.spawn(function()
     while true do
         task.wait(ServerHopDelay)
@@ -273,32 +338,10 @@ task.spawn(function()
     end
 end)
 
---// Main Farming Loop
-while true do
-    task.wait(0.5)
-
-    if not FarmingEnabled then
-        updateGUI("Paused", "Waiting for toggle...")
-        continue
+--// Panic Key (P) Instant Teleport to Safe Spot
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.P then
+        updateGUI("Panic Key!", "Teleporting to Safe Spot...")
+        instantTeleport(SafeSpot)
     end
-
-    local validItem
-    for i = #TrackedItems, 1, -1 do
-        local item = TrackedItems[i]
-        if item.model and item.prompt and item.prompt.Parent and item.part and not item.model:IsDescendantOf(nil) then
-            validItem = item
-            table.remove(TrackedItems, i)
-            break
-        else
-            table.remove(TrackedItems, i)
-        end
-    end
-
-    if validItem then
-        pickupItem(validItem)
-    else
-        quickSell()
-        buyLucky()
-        updateGUI("Idle", "Waiting for items...")
-    end
-end
+end)
