@@ -1,41 +1,39 @@
--- Light Item Spawn Logger for YBA
+-- Safer Item Spawn Logger (No Crash Version)
+
 local Workspace = game:GetService("Workspace")
 local HttpService = game:GetService("HttpService")
 
-local scannedItems = {}
-local logFileName = "YBA_ItemSpawns.json"
+local ItemFolder = Workspace:WaitForChild("Item_Spawns"):WaitForChild("Items")
+local loggedItems = {}
+local fileName = "YBA_ItemSpawns.json"
 
-local function saveToFile()
+local function save()
     if writefile then
-        writefile(logFileName, HttpService:JSONEncode(scannedItems))
+        writefile(fileName, HttpService:JSONEncode(loggedItems))
     end
 end
 
-local function logItem(item)
-    if item:IsA("Model") and not scannedItems[item:GetFullName()] then
+local function logNewItem(item)
+    task.spawn(function()
+        task.wait(0.5) -- wait half second for item to fully load
+
+        if not item:IsA("Model") then return end
         local part = item:FindFirstChildWhichIsA("BasePart", true)
-        if part then
-            scannedItems[item:GetFullName()] = {
-                Name = item.Name,
-                Position = part.Position
-            }
-            print("Logged Item:", item.Name, tostring(part.Position))
-            saveToFile()
-        end
-    end
+        if not part then return end
+        if loggedItems[item.Name] then return end -- already logged?
+
+        loggedItems[item.Name] = {
+            X = math.floor(part.Position.X),
+            Y = math.floor(part.Position.Y),
+            Z = math.floor(part.Position.Z),
+        }
+
+        print("[LOGGED]", item.Name, part.Position)
+        save()
+    end)
 end
 
-local itemFolder = Workspace:WaitForChild("Item_Spawns"):WaitForChild("Items")
+-- Only future spawns
+ItemFolder.ChildAdded:Connect(logNewItem)
 
--- Scan existing
-for _, item in ipairs(itemFolder:GetChildren()) do
-    logItem(item)
-end
-
--- Scan new items
-itemFolder.ChildAdded:Connect(function(item)
-    task.wait(0.2)
-    logItem(item)
-end)
-
-print("✅ Item logger running.")
+print("✅ YBA Light Logger running. Waiting for item spawns...")
