@@ -17,6 +17,7 @@ local Character = function() return Player.Character or Player.CharacterAdded:Wa
 local HRP = function() return Character():WaitForChild("HumanoidRootPart") end
 local PlayerStats = Player:WaitForChild("PlayerStats")
 
+local SpeedModeEnabled = false
 local PLACE_ID = 2809202155
 local SafeSpot = CFrame.new(978, -42, -49)
 local ServerHopDelay = 105
@@ -24,6 +25,8 @@ local StayTimeUnderItem = 0.5
 local FarmingEnabled = true
 local IsFarming = false
 local TrackedItems = {}
+local FastPickupDelay = 0.15 -- or whatever you want (smaller = faster)
+local NormalPickupDelay = 0.25
 
 --// Anti-Cheat Bypass
 local oldNamecall
@@ -177,35 +180,55 @@ end
 --// Pickup Item
 local function pickupItem(item)
     IsFarming = true
-    updateGUI("Farming", "Going to item...", item.name)
-    instantTeleport(CFrame.new(item.position + Vector3.new(0, -6, 0)))
-    task.wait(0.1)
+    updateGUI("Farming", "Teleporting to item...", item.name)
 
+    -- Instant teleport directly under the item
+    HRP().CFrame = CFrame.new(item.position + TeleportOffset)
+    task.wait(0.05)
+
+    -- Hold E key
     updateGUI("Picking", "Holding E", item.name)
     holdE(0.25)
-    pcall(function() fireproximityprompt(item.prompt) end)
+
+    pcall(function()
+        fireproximityprompt(item.prompt)
+    end)
+
     task.wait(StayTimeUnderItem)
 
     IsFarming = false
 end
 
+
 --// Quick Sell All
 local function quickSell()
-    local backpack = Player.Backpack:GetChildren()
-    for _, tool in ipairs(backpack) do
-        local hum = Character():FindFirstChildOfClass("Humanoid")
-        if hum and tool:IsA("Tool") then
+    local char = Character()
+    local hum = char:FindFirstChild("Humanoid")
+    if not hum then return end
+
+    -- Unequip anything currently held
+    hum:UnequipTools()
+    task.wait(0.1)
+
+    -- Now sell every tool inside Backpack
+    for _, tool in ipairs(Player.Backpack:GetChildren()) do
+        if tool:IsA("Tool") then
             hum:EquipTool(tool)
             local timeout = tick() + 1
-            repeat task.wait(0.1) until Character():FindFirstChild(tool.Name) or tick() > timeout
-            if Character():FindFirstChild(tool.Name) then
-                Character().RemoteEvent:FireServer("EndDialogue", { NPC = "Merchant", Dialogue = "Dialogue5", Option = "Option2" })
-                updateGUI("Sold", "Sold " .. tool.Name)
+            repeat task.wait(0.1) until char:FindFirstChild(tool.Name) or tick() > timeout
+            if char:FindFirstChild(tool.Name) then
+                char.RemoteEvent:FireServer("EndDialogue", {
+                    NPC = "Merchant",
+                    Dialogue = "Dialogue5",
+                    Option = "Option2"
+                })
                 task.wait(0.3)
+                updateGUI("Sold", "Sold: " .. tool.Name)
             end
         end
     end
 end
+
 
 --// Lucky Arrow Auto Buyer
 local function buyLucky()
