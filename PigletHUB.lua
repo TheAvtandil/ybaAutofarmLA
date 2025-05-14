@@ -289,27 +289,14 @@ TeleportTo(CFrame.new(978, -42, -49))
 task.wait(5)
 
 -- Buy Lucky Arrow if enabled
-if BuyLucky then
-    local function BuyLuckyArrow()
-        local LuckyArrowNPC = workspace:FindFirstChild("Lucky Arrow Dealer")
-        if LuckyArrowNPC then
-            local oldPosition = GetCharacter("HumanoidRootPart").CFrame
-            TeleportTo(LuckyArrowNPC.HumanoidRootPart.CFrame * CFrame.new(0, 0, -3))
-            task.wait(0.5)
-            -- Fire the remote to buy lucky arrow
-            local buyEvent = GetCharacter("RemoteEvent")
-            if buyEvent then
-                buyEvent:FireServer("BuyLuckyArrow")
-                task.wait(0.2)
-            end
-            TeleportTo(oldPosition)
-        end
-    end
-    
-    -- Attempt to buy Lucky Arrow
-    BuyLuckyArrow()
-end
+local Money = Player.PlayerStats.Money
 
+if BuyLucky then
+    while Money.Value >= 50000 do
+        Player.Character.RemoteEvent:FireServer("PurchaseShopItem", {["ItemName"] = "1x Lucky Arrow"})
+        task.wait(.1)
+    end
+end
 -- Main item collection loop
 while true do
     local itemsCollected = false
