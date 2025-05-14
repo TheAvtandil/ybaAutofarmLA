@@ -240,23 +240,22 @@ end))
 task.wait(1)
 
 -- Auto-sell function
-local function SellItem(itemName)
-    if SellItems[itemName] and AutoSell then
-        local NPC = workspace:FindFirstChild("Item Machine")
-        if NPC then
-            local oldPosition = GetCharacter("HumanoidRootPart").CFrame
-            TeleportTo(NPC.HumanoidRootPart.CFrame * CFrame.new(0, 0, -3))
-            task.wait(0.5)
-            -- Fire the remote to sell the item
-            local sellEvent = GetCharacter("RemoteEvent")
-            if sellEvent then
-                sellEvent:FireServer("SellItem", itemName)
-                task.wait(0.2)
-            end
-            TeleportTo(oldPosition)
+if AutoSell then
+    for Item, Sell in pairs(SellItems) do
+        if Sell and Player.Backpack and Player.Backpack:FindFirstChild(Item) then
+            GetCharacter("Humanoid"):EquipTool(Player.Backpack:FindFirstChild(Item))
+
+            GetCharacter("RemoteEvent"):FireServer("EndDialogue", {
+                ["NPC"] = "Merchant",
+                ["Dialogue"] = "Dialogue5",
+                ["Option"] = "Option2"
+            })
+
+            task.wait(.1)
         end
     end
 end
+
 
 -- Handle loading screens
 if PlayerGui:FindFirstChild("LoadingScreen1") then
